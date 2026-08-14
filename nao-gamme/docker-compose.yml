@@ -1,0 +1,85 @@
+services:
+    postgres:
+        image: postgres:16-alpine
+        container_name: nao_gamme_postgres
+        env_file:
+            - .env
+        environment:
+            POSTGRES_USER: ${POSTGRES_USER:-nao}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nao}
+            POSTGRES_DB: ${POSTGRES_DB:-nao}
+        volumes:
+            - nao_gamme_postgres_data:/var/lib/postgresql/data
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-nao} -d ${POSTGRES_DB:-nao}']
+            interval: 5s
+            timeout: 5s
+            retries: 5
+        restart: unless-stopped
+
+    nao:
+        image: getnao/nao:latest
+        container_name: nao_gamme
+        ports:
+            - '127.0.0.1:${SERVER_PORT:-5005}:${SERVER_PORT:-5005}'
+        environment:
+            SERVER_PORT: ${SERVER_PORT:-5005}
+            BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+            BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:5005/}
+            # Clés des fournisseurs LLM (relues depuis la config du projet via {{ env(...) }})
+            OPENCODE_BASE_URL: ${OPENCODE_BASE_URL}
+            OPENCODE_API_KEY: ${OPENCODE_API_KEY}
+            GEMINI_API_KEY: ${GEMINI_API_KEY}
+            # Base de données de l'historique des conversations
+            DB_URI: postgres://${POSTGRES_USER:-nao}:${POSTGRES_PASSWORD:-nao}@postgres:5432/${POSTGRES_DB:-nao}
+            # Inscription libre (désactivée après création des comptes)
+            ENABLE_USER_SIGNUP: ${ENABLE_USER_SIGNUP:-false}
+            # Projet nao (config + fichiers) monté dans le conteneur
+            NAO_CONTEXT_SOURCE: local
+            NAO_DEFAULT_PROJECT_PATH: /app/project
+        volumes:
+            - /root/nao-gamme:/app/project
+            - /root/nao-gamme/storage:/app/storage
+        depends_on:
+            postgres:
+                condition: service_healthy
+        restart: unless-stopped
+
+    caddy:
+        image: caddy:2-alpine
+        container_name: nao_gamme_caddy
+        ports:
+            - '80:80'
+            - '443:443'
+        volumes:
+            - ./Caddyfile:/etc/caddy/Caddyfile:ro
+            - ./docs/rapports:/rapports:ro
+            - ./docs/etiquettes:/etiquettes:ro
+            - caddy_config:/config
+            - caddy_data:/data
+        depends_on:
+            - nao
+        restart: unless-stopped
+
+    gamme-engine:
+        build: /root/gamme-engine
+        container_name: gamme_engine
+        ports:
+            - '127.0.0.1:8010:8010'
+        environment:
+            OPENCODE_BASE_URL: ${OPENCODE_BASE_URL}
+            OPENCODE_API_KEY: ${OPENCODE_API_KEY}
+            GAMME_LLM_MODEL: ${GAMME_LLM_MODEL:-hy3-free}
+            GAMME_MAX_LLM_ARTICLES: ${GAMME_MAX_LLM_ARTICLES:-40}
+            GAMME_DATA_DIR: /storage/gamme
+            NAO_PROJECT_DIR: /app/nao-project
+        volumes:
+            - /storage/gamme:/storage/gamme
+            - /root/nao-gamme:/app/nao-project
+            - /root/nao-gamme/storage:/storage/gamme/uploads
+        restart: unless-stopped
+
+volumes:
+    nao_gamme_postgres_data:
+    caddy_config:
+    caddy_data:

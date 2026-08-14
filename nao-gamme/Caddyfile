@@ -1,0 +1,17 @@
+# Gamme Épicerie Salée — nao agent en production
+lololo.hypeer.cloud {
+	encode zstd gzip
+	handle /rapports/* {
+		uri strip_prefix /rapports
+		root * /rapports
+		file_server browse
+	}
+	handle /etiquettes/* {
+		uri strip_prefix /etiquettes
+		root * /etiquettes
+		file_server browse
+	}
+	handle {
+		reverse_proxy nao:5005
+	}
+}

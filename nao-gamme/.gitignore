@@ -1,0 +1,13 @@
+.env
+.env.bak
+.env.*
+!.env.example
+
+__pycache__/
+*.pyc
+
+storage/
+databases/
+*.log
+
+.DS_Store
