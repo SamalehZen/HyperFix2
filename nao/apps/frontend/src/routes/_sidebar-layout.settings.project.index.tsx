@@ -1,0 +1,63 @@
+import { createFileRoute } from '@tanstack/react-router';
+import { useQuery } from '@tanstack/react-query';
+
+import { DateFormatSection } from '@/components/settings/date-format-section';
+import { EnvVarsSection } from '@/components/settings/env-vars-section';
+import { GoogleConfigSection } from '@/components/settings/google-credentials-section';
+import { SettingsCard } from '@/components/ui/settings-card';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { usePermissions } from '@/hooks/use-permissions';
+import { trpc } from '@/main';
+
+export const Route = createFileRoute('/_sidebar-layout/settings/project/')({
+	component: ProjectTabPage,
+});
+
+function ProjectTabPage() {
+	const project = useQuery(trpc.project.getCurrent.queryOptions());
+	const systemConfig = useQuery(trpc.system.getPublicConfig.queryOptions());
+	const { isAdmin } = usePermissions();
+	const isCloud = systemConfig.data?.naoMode === 'cloud';
+
+	return (
+		<>
+			<SettingsCard title='Project Information'>
+				<div className='grid gap-2'>
+					<label htmlFor='project-name' className='text-sm font-medium text-foreground'>
+						Name
+					</label>
+					<Input id='project-name' value={project.data?.name ?? ''} readOnly className='bg-muted/50' />
+				</div>
+				<div className='grid gap-2'>
+					<label htmlFor='project-path' className='text-sm font-medium text-foreground'>
+						Path
+					</label>
+					<Input
+						id='project-path'
+						value={project.data?.path ?? ''}
+						readOnly
+						className='bg-muted/50 font-mono text-sm'
+					/>
+				</div>
+			</SettingsCard>
+
+			<EnvVarsSection isAdmin={isAdmin} />
+
+			<DateFormatSection isAdmin={isAdmin} />
+
+			{!isCloud && (
+				<SettingsCard title='Google SSO'>
+					{project.isLoading ? (
+						<div className='space-y-2'>
+							<Skeleton className='h-4 w-40' />
+							<Skeleton className='h-4 w-full max-w-xs' />
+						</div>
+					) : (
+						<GoogleConfigSection isAdmin={isAdmin} />
+					)}
+				</SettingsCard>
+			)}
+		</>
+	);
+}

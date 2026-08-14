@@ -1,0 +1,303 @@
+import math
+import os
+import sys
+from contextlib import asynccontextmanager
+from datetime import date, datetime
+from decimal import Decimal
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import uvicorn
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+load_dotenv()
+
+cli_path = Path(__file__).resolve().parent.parent.parent.parent / "cli"
+sys.path.insert(0, str(cli_path))
+
+from nao_core.config import NaoConfig, NaoConfigError
+from nao_core.context import get_context_provider
+
+port = int(os.environ.get("PORT", 8005))
+
+# Global scheduler instance
+scheduler = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan - setup scheduler on startup."""
+    global scheduler
+
+    # Setup periodic refresh if configured
+    refresh_schedule = os.environ.get("NAO_REFRESH_SCHEDULE")
+    if refresh_schedule:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from apscheduler.triggers.cron import CronTrigger
+
+        scheduler = AsyncIOScheduler()
+
+        try:
+            trigger = CronTrigger.from_crontab(refresh_schedule)
+            scheduler.add_job(
+                _refresh_context_task,
+                trigger,
+                id="context_refresh",
+                name="Periodic context refresh",
+            )
+            scheduler.start()
+            print(f"[Scheduler] Periodic refresh enabled: {refresh_schedule}")
+        except ValueError as e:
+            print(f"[Scheduler] Invalid cron expression '{refresh_schedule}': {e}")
+
+    yield
+
+    # Shutdown scheduler
+    if scheduler:
+        scheduler.shutdown(wait=False)
+
+
+async def _refresh_context_task():
+    """Background task for scheduled context refresh."""
+    try:
+        provider = get_context_provider()
+        updated = provider.refresh()
+        if updated:
+            print(f"[Scheduler] Context refreshed at {datetime.now().isoformat()}")
+        else:
+            print(
+                f"[Scheduler] Context already up-to-date at {datetime.now().isoformat()}"
+            )
+    except Exception as e:
+        print(f"[Scheduler] Failed to refresh context: {e}")
+
+
+app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# =============================================================================
+# Request/Response Models
+# =============================================================================
+
+
+class ExecuteSQLRequest(BaseModel):
+    sql: str
+    nao_project_folder: str
+    database_id: str | None = None
+    env_vars: dict[str, str] | None = None
+    azure_access_token: str | None = None
+
+
+class ExecuteSQLResponse(BaseModel):
+    data: list[dict]
+    row_count: int
+    columns: list[str]
+    dialect: str | None = None
+
+
+class RefreshResponse(BaseModel):
+    status: str
+    updated: bool
+    message: str
+
+
+class HealthResponse(BaseModel):
+    status: str
+    context_source: str
+    context_initialized: bool
+    refresh_schedule: str | None
+
+
+def _convert_value(v: object):
+    """Convert a DataFrame cell to a JSON-serializable Python type."""
+    if v is None:
+        return None
+
+    # Handle float NaN / Infinity early (common in pandas output)
+    if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+        return None
+
+    # Handle pandas NA / NaT sentinels
+    if v is pd.NA or v is pd.NaT:
+        return None
+
+    # Numpy scalar types
+    if isinstance(v, np.bool_):
+        return bool(v)
+    if isinstance(v, np.integer):
+        return int(v)
+    if isinstance(v, np.floating):
+        val = float(v)
+        return None if math.isnan(val) or math.isinf(val) else val
+    if isinstance(v, np.ndarray):
+        return v.tolist()
+
+    # Python / DB types that aren't JSON-serializable by default
+    if isinstance(v, Decimal):
+        if v.is_nan() or v.is_infinite():
+            return None
+        return float(v)
+    if isinstance(v, (datetime, date)):
+        return v.isoformat()
+    if isinstance(v, bytes):
+        return v.decode("utf-8", errors="replace")
+
+    # Catch-all for remaining numpy scalars (e.g. np.str_, np.bytes_)
+    item_method = getattr(v, "item", None)
+    if callable(item_method):
+        return item_method()
+
+    return v
+
+
+# =============================================================================
+# API Endpoints
+# =============================================================================
+
+
+@app.get("/health", response_model=HealthResponse)
+async def health_check():
+    """Health check endpoint with context status."""
+    try:
+        provider = get_context_provider()
+        context_source = os.environ.get("NAO_CONTEXT_SOURCE", "local")
+        return HealthResponse(
+            status="ok",
+            context_source=context_source,
+            context_initialized=provider.is_initialized(),
+            refresh_schedule=os.environ.get("NAO_REFRESH_SCHEDULE"),
+        )
+    except Exception:
+        return HealthResponse(
+            status="error",
+            context_source=os.environ.get("NAO_CONTEXT_SOURCE", "local"),
+            context_initialized=False,
+            refresh_schedule=os.environ.get("NAO_REFRESH_SCHEDULE"),
+        )
+
+
+@app.post("/api/refresh", response_model=RefreshResponse)
+async def refresh_context():
+    """Trigger a context refresh (git pull if using git source).
+
+    This endpoint can be called by:
+    - CI/CD pipelines after pushing new context
+    - Webhooks when data schemas change
+    - Manual triggers for immediate updates
+    """
+    try:
+        provider = get_context_provider()
+        updated = provider.refresh()
+
+        if updated:
+            return RefreshResponse(
+                status="ok",
+                updated=True,
+                message="Context updated successfully",
+            )
+        else:
+            return RefreshResponse(
+                status="ok",
+                updated=False,
+                message="Context already up-to-date",
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to refresh context: {str(e)}",
+        )
+
+
+@app.post("/execute_sql", response_model=ExecuteSQLResponse)
+async def execute_sql(request: ExecuteSQLRequest):
+    try:
+        project_path = Path(request.nao_project_folder)
+        config = NaoConfig.try_load(
+            project_path,
+            raise_on_error=True,
+            extra_env=request.env_vars,
+        )
+        assert config is not None
+
+        if len(config.databases) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="No databases configured in nao_config.yaml",
+            )
+
+        if len(config.databases) == 1:
+            db_config = config.databases[0]
+        elif request.database_id:
+            db_config = next(
+                (db for db in config.databases if db.name == request.database_id),
+                None,
+            )
+            if db_config is None:
+                available_databases = [db.name for db in config.databases]
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "message": f"Database '{request.database_id}' not found",
+                        "available_databases": available_databases,
+                    },
+                )
+        else:
+            available_databases = [db.name for db in config.databases]
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": "Multiple databases configured. Please specify database_id.",
+                    "available_databases": available_databases,
+                },
+            )
+
+        auth_mode_value = getattr(getattr(db_config, "auth_mode", None), "value", None)
+
+        if auth_mode_value == "azure_entra_id":
+            if not request.azure_access_token:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "azure_access_token is required when the database auth_mode is "
+                        "'azure_entra_id'. Runtime queries must use the end user's access "
+                        "token; any configured user/password is only used by nao sync."
+                    ),
+                )
+            df = db_config.execute_sql_with_token(
+                request.sql, request.azure_access_token
+            )
+        else:
+            df = db_config.execute_sql(request.sql)
+
+        data = [
+            {k: _convert_value(v) for k, v in row.items()}
+            for row in df.to_dict(orient="records")
+        ]
+
+        return ExecuteSQLResponse(
+            data=data,
+            row_count=len(data),
+            columns=[str(c) for c in df.columns.tolist()],
+            dialect=db_config.type,
+        )
+    except HTTPException:
+        raise
+    except NaoConfigError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

@@ -1,0 +1,87 @@
+# GitHub handles approved to bypass contribution auto-close
+# Format: <username> <capability>
+# capability:
+#   issue  future issues stay open
+#   pr     future issues and PRs stay open
+
+d-axel-b pr
+
+h30s issue
+
+mktemba issue
+
+jeannicolasfine pr
+
+cybermaxs issue
+
+florian-drouet issue
+
+nehaaprasaad pr
+
+cainemerrick98 pr
+
+devxspectre issue
+
+VoxelPrincess issue
+
+auguste-elax pr
+
+MiuRaduFlorinMS pr
+
+afranzi pr
+
+pvonglehn issue
+
+jatizon issue
+
+VaitaR issue
+
+patrick-philips-honor pr
+
+hhanid pr
+
+ashakoteru-ship-it issue
+
+manypozo pr
+
+sfangman issue
+
+fredericogenovez pr
+
+tclavelloux pr
+
+laetibouud pr
+
+ghilesmeddour issue
+
+clementhemidy pr
+
+dennisUhrskov pr
+
+bcodp issue
+
+LouisLecatCAB pr
+
+kabam-blambert issue
+
+Francois-lenne pr
+
+alexis-fryc pr
+
+tckaros pr
+
+btalx pr
+
+adrienalbert pr
+
+briacbln pr
+
+beherap pr
+
+adamparrott-ls pr
+
+joebordes pr
+
+thokich pr
+
+andrebaaij pr
