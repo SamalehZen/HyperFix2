@@ -27,7 +27,7 @@ repos: []
 llm:
   providers:
   - provider: openaiCompatible/opencode
-    api_key: sk-REVOQUEE_VOIR_.env
+    api_key: {{ env('OPENCODE_API_KEY') }}
     base_url: https://opencode.ai/zen/go/v1
     models:
     - id: deepseek-v4-flash

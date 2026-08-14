@@ -38,8 +38,8 @@ services:
             NAO_CONTEXT_SOURCE: local
             NAO_DEFAULT_PROJECT_PATH: /app/project
         volumes:
-            - /root/nao-gamme:/app/project
-            - /root/nao-gamme/storage:/app/storage
+            - .:/app/project
+            - ./storage:/app/storage
         depends_on:
             postgres:
                 condition: service_healthy
@@ -62,7 +62,7 @@ services:
         restart: unless-stopped
 
     gamme-engine:
-        build: /root/gamme-engine
+        build: ../gamme-engine
         container_name: gamme_engine
         ports:
             - '127.0.0.1:8010:8010'
@@ -75,8 +75,8 @@ services:
             NAO_PROJECT_DIR: /app/nao-project
         volumes:
             - /storage/gamme:/storage/gamme
-            - /root/nao-gamme:/app/nao-project
-            - /root/nao-gamme/storage:/storage/gamme/uploads
+            - .:/app/nao-project
+            - ./storage:/storage/gamme/uploads
         restart: unless-stopped
 
 volumes:
