@@ -9,18 +9,28 @@ compensateurs, et génération automatique de rapports (texte, HTML classique et
 
 ```
 HyperFix/
-├── nao-gamme/                 # Agent nao + orchestration (docker-compose)
-│   ├── docker-compose.yml     # Déploie tout le stack
-│   ├── Caddyfile              # Reverse proxy (domaine, rapports, étiquettes)
-│   ├── RULES.md               # Règles métier de l'agent
-│   ├── nao_config.yaml        # Configuration du projet nao (LLM, DuckDB)
-│   ├── .env.example           # Modèle de variables d'environnement
-│   ├── agent/                 # Spécifications MCP, prompts, skills
-│   ├── docs/                  # Documentations + rapports générés
-│   └── storage/               # Données locales (exclues de git)
-└── gamme-engine/              # Moteur MCP Python (analyse de la gamme)
-    └── app/                   # API FastAPI + serveur MCP
+├── nao/                     # Code source complet de l'agent nao (getnao)
+│   ├── apps/                # Frontend (React) + backend (NestJS) + libs partagées
+│   ├── cli/                 # CLI Python nao (config, sync contexte, tests)
+│   ├── skills/              # Skills métier de l'agent
+│   ├── helm/                # Chart Helm pour déploiement Kubernetes
+│   └── docker-compose.yml   # Pile nao autonome
+├── nao-gamme/               # Config métier nao + orchestration (docker-compose)
+│   ├── docker-compose.yml   # Déploie tout le stack (nao + moteur + caddy)
+│   ├── Caddyfile            # Reverse proxy (domaine, rapports, étiquettes)
+│   ├── RULES.md             # Règles métier de l'agent
+│   ├── nao_config.yaml      # Configuration du projet nao (LLM, DuckDB)
+│   ├── .env.example         # Modèle de variables d'environnement
+│   ├── agent/               # Spécifications MCP, prompts, skills
+│   ├── docs/                # Documentations + rapports générés
+│   └── storage/             # Données locales (exclues de git)
+└── gamme-engine/            # Moteur MCP Python (analyse de la gamme)
+    └── app/                 # API FastAPI + serveur MCP
 ```
+
+> `nao/` est le code source de l'agent conversationnel ; `nao-gamme/` est la
+> configuration métier qui lance nao via l'image `getnao/nao:latest` avec le
+> moteur `gamme-engine` en MCP.
 
 | Service | Image / Build | Rôle | Port |
 |---|---|---|---|
