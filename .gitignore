@@ -10,6 +10,7 @@ __pycache__/
 # Données générées de production (jamais committer)
 nao-gamme/docs/rapports/
 nao-gamme/docs/etiquettes/
+nao-gamme/docs/images/
 
 # Environnement
 .env

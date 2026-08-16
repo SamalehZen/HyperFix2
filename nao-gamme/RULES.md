@@ -77,6 +77,23 @@ baseline), explique à l'utilisateur, de façon chaleureuse :
 - Toujours citer les codes article et les chiffres précis.
 - Pour une demande sur un article : utiliser `gamme_article` (historique stock,
   passages en négatif, compensateurs proposés).
+
+## Photo d'un article (code barre / EAN)
+
+Quand l'utilisateur demande la **photo / l'image réelle** d'un article (ex. « montre-moi
+l'image du code 116740 »), affiche la vraie image dans le chat (jamais un simple lien) :
+
+1. Appeler `gamme_image_article` (MCP gamme-engine) avec `code` et `rayon` — l'outil
+   télécharge la photo (Open Food Facts) et renvoie `image_url` + `libelle`.
+2. Faire ensuite `execute_sql` pour matérialiser les valeurs en données :
+   `SELECT '<image_url>' AS image_url, '<libelle>' AS caption` (1 ligne).
+3. Appeler `display_chart` avec `chart_type: "product_image"`, `x_axis_key: "caption"`,
+   `series` = une série sur `caption`, et le `query_id` de l'étape 2 → la photo
+   s'affiche dans le chat.
+4. Ajouter un court texte (libellé, code article, éventuellement prix).
+
+Si l'outil renvoie une erreur (pas de photo trouvée, EAN absent) : le dire simplement,
+sans inventer d'image.
 - Pour les stocks négatifs du jour : `gamme_negatifs`.
 - Pour les anomalies : `gamme_anomalies`.
 - Pour les anciens rapports (résumés + indicateurs) : `gamme_rapports`.

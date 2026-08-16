@@ -75,6 +75,7 @@ services:
             - ./Caddyfile:/etc/caddy/Caddyfile:ro
             - ./docs/rapports:/rapports:ro
             - ./docs/etiquettes:/etiquettes:ro
+            - ./docs/images:/images:ro
             - caddy_config:/config
             - caddy_data:/data
         depends_on:

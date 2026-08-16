@@ -280,6 +280,109 @@ def gamme_article(code: int, rayon: str) -> str:
 
 
 @mcp.tool()
+def gamme_image_article(code: int, rayon: str) -> str:
+    """Photo réelle d'un article depuis son code barre (EAN) : télécharge l'image
+    depuis Open Food Facts et la publie sous https://lololo.hypeer.cloud/images/...
+    pour l'afficher dans le chat (via execute_sql + display_chart product_image)."""
+    import requests
+
+    _guard_rayon(rayon)
+    with db.lock_conn() as conn:
+        row = conn.execute(
+            "SELECT ean, libelle FROM article_history WHERE code = ? AND rayon = ? "
+            "AND ean IS NOT NULL AND ean != '' ORDER BY jour DESC LIMIT 1",
+            (code, rayon),
+        ).fetchone()
+    if row is None or row["ean"] is None:
+        return json.dumps(
+            {"success": False, "erreur": f"Aucun EAN trouvé pour le code {code} (rayon `{rayon}`)."},
+            ensure_ascii=False,
+        )
+    ean = str(row["ean"]).strip()
+    libelle = row["libelle"] or ""
+    headers = {"User-Agent": "HyperFix-Gamme/1.0 (contact: gamme@hyperfix.local)"}
+
+    def _download(url: str) -> tuple[bytes, str] | None:
+        try:
+            resp = requests.get(url, headers=headers, timeout=30)
+            resp.raise_for_status()
+            ctype = resp.headers.get("Content-Type") or ""
+            if not ctype.startswith("image/"):
+                return None
+            ext = ".png" if ctype.startswith("image/png") else ".jpg"
+            return resp.content, ext
+        except Exception:
+            return None
+
+    try:
+        img_url = None
+        try:
+            resp = requests.get(
+                f"https://world.openfoodfacts.org/api/v2/product/{ean}.json",
+                params={"fields": "image_front_url,image_url,product_name"},
+                headers=headers,
+                timeout=20,
+            )
+            product = (resp.json().get("product") or {}) if resp.ok else {}
+            img_url = product.get("image_front_url") or product.get("image_url")
+            nom = product.get("product_name") or libelle
+        except Exception:
+            nom = libelle
+
+        if not img_url:
+            try:
+                from ddgs import DDGS
+
+                for query in (ean, libelle):
+                    results = DDGS().images(query, max_results=3)
+                    if results:
+                        img_url = results[0].get("image")
+                        break
+            except Exception:
+                img_url = None
+
+        if not img_url:
+            return json.dumps(
+                {"success": False, "erreur": f"Pas de photo trouvée pour le EAN {ean} (Open Food Facts + recherche web)."},
+                ensure_ascii=False,
+            )
+
+        downloaded = _download(img_url)
+        if downloaded is None:
+            return json.dumps(
+                {"success": False, "erreur": f"Photo introuvable/téléchargement impossible ({ean})."},
+                ensure_ascii=False,
+            )
+        content, ext = downloaded
+        out_dir = os.path.join(config.NAO_PROJECT_DIR, "docs", "images")
+        os.makedirs(out_dir, exist_ok=True)
+        out_path = os.path.join(out_dir, f"{ean}{ext}")
+        with open(out_path, "wb") as f:
+            f.write(content)
+        return json.dumps(
+            {
+                "success": True,
+                "code": code,
+                "ean": ean,
+                "libelle": nom,
+                "image_url": f"https://lololo.hypeer.cloud/images/{ean}{ext}",
+                "note": (
+                    "Pour afficher la photo dans le chat, fais maintenant execute_sql avec "
+                    "SELECT '<image_url>' AS image_url, '<libelle>' AS caption puis "
+                    "display_chart avec chart_type product_image et le query_id renvoyé."
+                ),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    except Exception as e:
+        return json.dumps(
+            {"success": False, "erreur": f"Erreur lors de la récupération de la photo : {e}"},
+            ensure_ascii=False,
+        )
+
+
+@mcp.tool()
 def gamme_anomalies(rayon: str, limit: int = 50) -> str:
     """Anomalies du dernier import (marges négatives, chutes/hausses de stock, promos)."""
     _guard_rayon(rayon)

@@ -11,6 +11,11 @@ lololo.hypeer.cloud {
 		root * /etiquettes
 		file_server browse
 	}
+	handle /images/* {
+		uri strip_prefix /images
+		root * /images
+		file_server
+	}
 	handle /mcp* {
 		reverse_proxy gamme-engine:8010
 	}

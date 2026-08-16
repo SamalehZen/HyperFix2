@@ -1,0 +1,4 @@
+{
+    "name": "Photo produit",
+    "description": "Affiche la photo réelle d'un article (depuis son code barre EAN)."
+}
