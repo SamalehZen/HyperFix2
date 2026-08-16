@@ -51,6 +51,8 @@ services:
             DB_URI: postgres://${POSTGRES_USER:-nao}:${POSTGRES_PASSWORD:-nao}@postgres:5432/${POSTGRES_DB:-nao}
             # Inscription libre (désactivée après création des comptes)
             ENABLE_USER_SIGNUP: ${ENABLE_USER_SIGNUP:-false}
+            # Bêta : recommandations de contexte IA (audit périodique du contexte)
+            BETA_CONTEXT_RECOMMENDATIONS_ENABLED: ${BETA_CONTEXT_RECOMMENDATIONS_ENABLED:-false}
             # Projet nao (config + fichiers) monté dans le conteneur
             NAO_CONTEXT_SOURCE: local
             NAO_DEFAULT_PROJECT_PATH: /app/project
