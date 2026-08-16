@@ -41,7 +41,12 @@ services:
             # Clés des fournisseurs LLM (relues depuis la config du projet via {{ env(...) }})
             OPENCODE_BASE_URL: ${OPENCODE_BASE_URL}
             OPENCODE_API_KEY: ${OPENCODE_API_KEY}
+            # Provider OpenCode Zen (pay-as-you-go) — modèle par défaut des conversations
+            OPENCODE_ZEN_BASE_URL: ${OPENCODE_ZEN_BASE_URL}
+            OPENCODE_ZEN_API_KEY: ${OPENCODE_ZEN_API_KEY}
             GEMINI_API_KEY: ${GEMINI_API_KEY}
+            # Bot Telegram (webhook) — config en base de données (project.telegram_settings)
+            TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
             # Base de données de l'historique des conversations
             DB_URI: postgres://${POSTGRES_USER:-nao}:${POSTGRES_PASSWORD:-nao}@postgres:5432/${POSTGRES_DB:-nao}
             # Inscription libre (désactivée après création des comptes)
@@ -82,8 +87,8 @@ services:
         ports:
             - '127.0.0.1:8010:8010'
         environment:
-            OPENCODE_BASE_URL: ${OPENCODE_BASE_URL}
-            OPENCODE_API_KEY: ${OPENCODE_API_KEY}
+            OPENCODE_BASE_URL: ${OPENCODE_ZEN_BASE_URL}
+            OPENCODE_API_KEY: ${OPENCODE_ZEN_API_KEY}
             NAO_AUTH_ISSUER: ${BETTER_AUTH_URL}
             # Resource server URL publique (PRM + audience des JWT) — via Caddy
             GAMME_MCP_URL: https://lololo.hypeer.cloud/mcp

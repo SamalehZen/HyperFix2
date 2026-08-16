@@ -26,6 +26,19 @@ repos: []
 # database and takes precedence over this block until it is deleted there.
 llm:
   providers:
+  - provider: openaiCompatible/opencode-zen
+    api_key: "{{ env('OPENCODE_ZEN_API_KEY') }}"
+    base_url: "{{ env('OPENCODE_ZEN_BASE_URL') }}"
+    models:
+    - id: hy3-free
+      name: Hy3 Free (par défaut)
+      default: true
+    - id: deepseek-v4-flash
+      name: DeepSeek V4 Flash (défaut dès paiement ajouté)
+      default: false
+    - id: deepseek-v4-pro
+      name: DeepSeek V4 Pro (rechange)
+      default: false
   - provider: openaiCompatible/opencode
     api_key: "{{ env('OPENCODE_API_KEY') }}"
     base_url: https://opencode.ai/zen/go/v1
