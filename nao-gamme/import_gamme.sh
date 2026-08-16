@@ -3,7 +3,7 @@
 # Dépôt quotidien de la gamme épicerie salée (repli manuel)
 # Le moteur gamme_engine surveille /storage/gamme/depot (toutes les 60 s)
 # et enchaîne : archivage -> snapshot -> comparaison J/J-1 ->
-#               classification -> anomalies -> compensateurs LLM -> rapport
+#               classification -> anomalies -> compensateurs LLM
 # Usage : ./import_gamme.sh /chemin/vers/nouveau_gamme.xlsx
 # ============================================================
 set -euo pipefail
@@ -38,4 +38,4 @@ done
 echo "==> Dernier état des imports:"
 curl -s -m 10 http://127.0.0.1:8010/api/status | python3 -m json.tool || echo "(moteur injoignable — vérifier le conteneur gamme_engine)"
 echo
-echo "Rapports: /storage/gamme/rapports/ — API: http://127.0.0.1:8010/api/rapport/YYYY-MM-DD"
+echo "Dashboard: https://lololo.hypeer.cloud/story/ — API: https://lololo.hypeer.cloud/story-data/jours"
