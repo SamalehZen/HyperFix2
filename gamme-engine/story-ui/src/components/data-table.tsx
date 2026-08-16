@@ -802,7 +802,7 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
                   </div>
                   <span className="text-muted-foreground">{c.justification}</span>
                   <span className="text-muted-foreground tabular-nums">
-                    Px revient {fmtFdj(c.px_revient)} · Couv. {fmtNum(c.couv, 1)}
+                    Px revient {fmtFdj(c.px_revient)} · Stock {fmtNum(c.stock)} · Px vente {fmtFdj(c.px_vente)}
                   </span>
                 </div>
               ))

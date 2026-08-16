@@ -171,6 +171,7 @@ def compensate(df, negative_codes, negative_libelles=None):
                         "px_revient": cand["px_revient"],
                         "px_vente": cand["px_vente"],
                         "couv": cand["couv"],
+                        "stock": cand["stock"],
                         "score": c.get("score"),
                         "confiance": c.get("confiance"),
                         "justification": c.get("justification"),

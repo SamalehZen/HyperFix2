@@ -67,7 +67,9 @@ CREATE TABLE IF NOT EXISTS compensations (
     criteres_json TEXT,
     libelle_compensateur TEXT,
     px_revient_compensateur REAL,
-    couv_compensateur REAL
+    couv_compensateur REAL,
+    stock_compensateur REAL,
+    px_vente_compensateur REAL
 );
 CREATE TABLE IF NOT EXISTS anomalies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,6 +104,8 @@ def init_db():
             ("libelle_compensateur", "ALTER TABLE compensations ADD COLUMN libelle_compensateur TEXT"),
             ("px_revient_compensateur", "ALTER TABLE compensations ADD COLUMN px_revient_compensateur REAL"),
             ("couv_compensateur", "ALTER TABLE compensations ADD COLUMN couv_compensateur REAL"),
+            ("stock_compensateur", "ALTER TABLE compensations ADD COLUMN stock_compensateur REAL"),
+            ("px_vente_compensateur", "ALTER TABLE compensations ADD COLUMN px_vente_compensateur REAL"),
         ):
             if name not in cols:
                 conn.execute(ddl)
@@ -212,11 +216,11 @@ def record_negatif(conn, import_id, rayon, jour, code, stock_j1, stock_j, variat
 def record_compensations(conn, import_id, rayon, jour, code_negatif, results):
     for i, r in enumerate(results, start=1):
         conn.execute(
-            "INSERT INTO compensations (import_id, rayon, jour, code_negatif, code_compensateur, rang, score, confiance, justification, criteres_json, libelle_compensateur, px_revient_compensateur, couv_compensateur) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO compensations (import_id, rayon, jour, code_negatif, code_compensateur, rang, score, confiance, justification, criteres_json, libelle_compensateur, px_revient_compensateur, couv_compensateur, stock_compensateur, px_vente_compensateur) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (import_id, rayon, jour, code_negatif, r.get("code"), i, r.get("score"), r.get("confiance"), r.get("justification"),
              json.dumps(r.get("criteres", {}), ensure_ascii=False),
-             r.get("libelle"), r.get("px_revient"), r.get("couv")),
+             r.get("libelle"), r.get("px_revient"), r.get("couv"), r.get("stock"), r.get("px_vente")),
         )
 
 

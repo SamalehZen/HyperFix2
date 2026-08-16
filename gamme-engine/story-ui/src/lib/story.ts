@@ -23,6 +23,8 @@ export interface Compensateur {
   confiance: string | null
   justification: string | null
   px_revient: number | null
+  px_vente: number | null
+  stock: number | null
   couv: number | null
 }
 

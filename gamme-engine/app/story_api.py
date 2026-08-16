@@ -150,6 +150,8 @@ def build_story_data(conn, rayon, jour):
                 "confiance": c["confiance"],
                 "justification": c["justification"],
                 "px_revient": c["px_revient_compensateur"],
+                "px_vente": c["px_vente_compensateur"],
+                "stock": c["stock_compensateur"],
                 "couv": c["couv_compensateur"],
             } for c in cs],
             "compensateur": cs[0]["libelle_compensateur"] if cs else None,
