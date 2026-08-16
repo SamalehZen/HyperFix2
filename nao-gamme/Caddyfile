@@ -11,6 +11,21 @@ lololo.hypeer.cloud {
 		root * /etiquettes
 		file_server browse
 	}
+	handle /mcp* {
+		reverse_proxy gamme-engine:8010
+	}
+	handle /.well-known/oauth-protected-resource* {
+		reverse_proxy gamme-engine:8010
+	}
+	handle /story/* {
+		reverse_proxy gamme-engine:8010
+	}
+	handle /story-data/* {
+		reverse_proxy gamme-engine:8010
+	}
+	handle /healthz {
+		reverse_proxy gamme-engine:8010
+	}
 	handle {
 		reverse_proxy nao:5005
 	}

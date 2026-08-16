@@ -2,8 +2,8 @@
 
 Plateforme complète d'analyse de la gamme pour l'épicerie salée : import quotidien
 du fichier de gamme, détection des prix/marges négatifs, suivi des anomalies,
-compensateurs, et génération automatique de rapports (texte, HTML classique et
-« story mode »), le tout via un agent conversationnel **nao**.
+compensateurs, et dashboard interactif « story mode », le tout via un agent
+conversationnel **nao**.
 
 ## Architecture
 
@@ -137,20 +137,22 @@ cd nao-gamme
 ```
 
 Le moteur enchaîne alors : archivage → snapshot → comparaison J/J-1 →
-classification → anomalies → compensateurs LLM → rapport.
+classification → anomalies → compensateurs LLM → dashboard story mode.
 
-### Les 3 livrables générés à chaque import
+### Le livrable généré à chaque import
 
-1. Rapport texte : `docs/rapports/rapport_<rayon>_<jour>.md`
-2. Rapport classique : `https://<domaine>/rapports/rapport_<rayon>_<jour>.html`
-3. Story mode (recommandé) : `https://<domaine>/rapports/rapport_story_<rayon>_<jour>.html`
+**Story mode** — dashboard interactif (SPA React + shadcn/ui, servie par
+gamme-engine, données live) :
+`https://<domaine>/story/?jour=<jour>&rayon=<rayon>`
 
 ### API du moteur (gamme-engine)
 
 | Endpoint | Description |
 |---|---|
 | `GET /api/status` | État du moteur et des imports |
-| `GET /api/rapport/YYYY-MM-DD` | Rapport du jour |
+| `GET /story/` | SPA story mode (dashboard shadcn/ui) |
+| `GET /story-data/jours?rayon=` | Jours disponibles (navigation story mode) |
+| `GET /story-data/YYYY-MM-DD?rayon=` | Données complètes du story mode |
 | MCP (port 8010) | Outils `gamme_import_file`, `gamme_rapports`, `gamme_negatifs`, `gamme_anomalies`, `gamme_etiquettes`, `gamme_rayons`… |
 
 ## Commandes utiles

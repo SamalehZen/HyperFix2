@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+
+# Bases de données générées (régénérées à chaque import)
+*.duckdb
+*.duckdb.wal
+*.duckdb.tmp
+
+# Données générées de production (jamais committer)
+nao-gamme/docs/rapports/
+nao-gamme/docs/etiquettes/
+
+# Environnement
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Divers
+.DS_Store

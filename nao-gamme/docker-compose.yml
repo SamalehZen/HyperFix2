@@ -20,12 +20,24 @@ services:
     nao:
         image: getnao/nao:latest
         container_name: nao_gamme
+        entrypoint:
+            - /bin/sh
+            - -c
+            - /app/patches/patch-oauth.sh && exec /entrypoint.sh
+        # Résolution locale du domaine → Caddy de l'hôte (bypass Cloudflare pour
+        # le client MCP du backend ; les requêtes navigateur passent par CF normalement)
+        extra_hosts:
+            - 'lololo.hypeer.cloud:host-gateway'
         ports:
             - '127.0.0.1:${SERVER_PORT:-5005}:${SERVER_PORT:-5005}'
         environment:
             SERVER_PORT: ${SERVER_PORT:-5005}
             BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
             BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:5005/}
+            # Audience OAuth supplémentaire : le moteur gamme-engine (patch validAudiences).
+            # Attention : correspondance EXACTE avec le resource du PRM (trailing slash inclus).
+            # URL publique (via Caddy) pour que le flux OAuth navigateur fonctionne.
+            GAMME_ENGINE_MCP_URL: https://lololo.hypeer.cloud/mcp
             # Clés des fournisseurs LLM (relues depuis la config du projet via {{ env(...) }})
             OPENCODE_BASE_URL: ${OPENCODE_BASE_URL}
             OPENCODE_API_KEY: ${OPENCODE_API_KEY}
@@ -40,6 +52,7 @@ services:
         volumes:
             - .:/app/project
             - ./storage:/app/storage
+            - ./nao-patches:/app/patches:ro
         depends_on:
             postgres:
                 condition: service_healthy
@@ -64,11 +77,16 @@ services:
     gamme-engine:
         build: ../gamme-engine
         container_name: gamme_engine
+        extra_hosts:
+            - 'lololo.hypeer.cloud:host-gateway'
         ports:
             - '127.0.0.1:8010:8010'
         environment:
             OPENCODE_BASE_URL: ${OPENCODE_BASE_URL}
             OPENCODE_API_KEY: ${OPENCODE_API_KEY}
+            NAO_AUTH_ISSUER: ${BETTER_AUTH_URL}
+            # Resource server URL publique (PRM + audience des JWT) — via Caddy
+            GAMME_MCP_URL: https://lololo.hypeer.cloud/mcp
             GAMME_LLM_MODEL: ${GAMME_LLM_MODEL:-hy3-free}
             GAMME_MAX_LLM_ARTICLES: ${GAMME_MAX_LLM_ARTICLES:-40}
             GAMME_DATA_DIR: /storage/gamme
