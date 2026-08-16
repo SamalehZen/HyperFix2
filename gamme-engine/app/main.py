@@ -6,17 +6,23 @@ import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, FileResponse
 
+from . import auth
 from . import config
 from . import db
 from . import pipeline
 from . import mcp_server
+from . import story_api
 
 
 @asynccontextmanager
 async def _lifespan(app):
+    db.init_db()
+    threading.Thread(target=bootstrap_baseline, daemon=True).start()
+    threading.Thread(target=watcher_loop, daemon=True).start()
+    threading.Thread(target=labels_cleanup_loop, daemon=True).start()
     mgr = getattr(mcp_server.mcp, "_session_manager", None)
     if mgr is not None:
         async with mgr.run():
@@ -25,7 +31,42 @@ async def _lifespan(app):
         yield
 
 
-app = FastAPI(title="gamme-engine", version="2.0.0", lifespan=_lifespan)
+app = FastAPI(title="gamme-engine", version="2.1.0", lifespan=_lifespan)
+
+
+def _extract_bearer(request: Request) -> str | None:
+    header = request.headers.get("authorization", "")
+    if header.lower().startswith("bearer "):
+        return header[7:].strip()
+    return None
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    """L'authentification du point de montage /mcp est gérée par FastMCP
+    (token_verifier + RFC 9728). Ici : protection des /api/* par JWT nao."""
+    path = request.url.path
+    if (
+        path == "/healthz"
+        or path.startswith("/.well-known/")
+        or path == "/mcp"
+        or path.startswith("/story")
+        or request.method == "OPTIONS"
+    ):
+        return await call_next(request)
+    token = _extract_bearer(request)
+    claims = auth.verify_token(token) if token else None
+    if claims is None:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    if auth.resolve_user(token, claims) is None:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    return await call_next(request)
+
+
+@app.get("/healthz")
+def healthz():
+    return JSONResponse({"ok": True})
+
 
 PROCESSING = set()
 BOOTSTRAP_LOCK = threading.Lock()
@@ -92,11 +133,24 @@ def watcher_loop():
         time.sleep(config.POLL_SECONDS)
 
 
-@app.on_event("startup")
-def startup():
-    db.init_db()
-    threading.Thread(target=bootstrap_baseline, daemon=True).start()
-    threading.Thread(target=watcher_loop, daemon=True).start()
+def labels_cleanup_loop():
+    labels_dir = os.path.join(config.NAO_PROJECT_DIR, "docs", "etiquettes")
+    while True:
+        try:
+            os.makedirs(labels_dir, exist_ok=True)
+            now = time.time()
+            purged = 0
+            for f in os.listdir(labels_dir):
+                p = os.path.join(labels_dir, f)
+                if os.path.isfile(p) and f.startswith("etiquettes_") and f.endswith(".pdf"):
+                    if now - os.path.getmtime(p) > 24 * 3600:
+                        os.remove(p)
+                        purged += 1
+            if purged:
+                print(f"[etiquettes] purgé {purged} PDF de plus de 24h")
+        except Exception as e:
+            print(f"[etiquettes] Erreur de purge: {e}")
+        time.sleep(3600)
 
 
 @app.get("/api/status")
@@ -144,16 +198,6 @@ def trigger_import(path: str, rayon: str = config.RAYON):
     return JSONResponse(res)
 
 
-@app.get("/api/rapport/{jour}")
-def get_rapport(jour: str, rayon: str = config.RAYON, mode: str = "classique"):
-    out_dir = config.rayon_rapports_dir(rayon, jour)
-    fname = "rapport_story.html" if mode == "story" else "rapport.html"
-    p = os.path.join(out_dir, fname)
-    if not os.path.exists(p):
-        return JSONResponse({"ok": False, "erreur": "Rapport introuvable pour ce jour"}, status_code=404)
-    return FileResponse(p)
-
-
 @app.get("/api/article/{code}/historique")
 def article_history(code: int, rayon: str = config.RAYON):
     with db.lock_conn() as conn:
@@ -189,6 +233,19 @@ def main():
     uvicorn.run(app, host="0.0.0.0", port=8010)
 
 
+app.include_router(story_api.router)
+
+_STORY_DIST = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "story-ui", "dist")
+if os.path.isdir(_STORY_DIST):
+    from fastapi.staticfiles import StaticFiles
+
+    app.mount("/story", StaticFiles(directory=_STORY_DIST, html=True), name="story")
+    print(f"[story] SPA story mode montée sur /story ({_STORY_DIST})")
+else:
+    print("[story] story-ui/dist absent — SPA non montée (lancer le build npm)")
+
+# Serveur MCP monté EN DERNIER (routes /api, /story-data et /story définies avant ;
+# l'app MCP sert /mcp et /.well-known/oauth-protected-resource en racine virtuelle)
 _streamable = mcp_server.streamable_app()
 if _streamable is not None:
     app.mount("/", _streamable)

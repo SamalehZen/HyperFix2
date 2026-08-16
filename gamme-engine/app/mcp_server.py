@@ -2,8 +2,10 @@ import json
 import os
 
 from mcp.server.fastmcp import FastMCP
-from mcp.server.fastmcp.server import TransportSecuritySettings
+from mcp.server.fastmcp.server import AuthSettings, TransportSecuritySettings
+from mcp.server.auth.middleware.auth_context import get_access_token
 
+from . import auth
 from . import config
 from . import db
 from . import labels
@@ -16,6 +18,12 @@ mcp = FastMCP(
         allowed_hosts=["*"],
         allowed_origins=["*"],
     ),
+    auth=AuthSettings(
+        issuer_url=auth.ISSUER,
+        resource_server_url=auth.GAMME_MCP_URL,
+        required_scopes=None,
+    ),
+    token_verifier=auth.NaoTokenVerifier(),
     instructions=(
         "Assistant métier 'Gamme' : import des fichiers de gamme, stocks négatifs, "
         "anomalies, compensateurs et rapports quotidiens. Tous les outils prennent un "
@@ -50,18 +58,80 @@ def _resume_to_markdown(res):
     return "\n".join(lines)
 
 
+def _current_user() -> dict | None:
+    """Gestionnaire authentifié (claims du token vérifié par FastMCP)."""
+    at = get_access_token()
+    if at is None:
+        return None
+    return {
+        "email": (at.claims or {}).get("email") or "",
+        "name": (at.claims or {}).get("name") or "",
+        "rayons": (at.claims or {}).get("rayons") or [],
+    }
+
+
+def _check_rayon(rayon: str) -> str | None:
+    """Renvoie un message d'erreur si le gestionnaire connecté n'a pas accès au rayon."""
+    user = _current_user()
+    if user is None:
+        return "Authentification requise : votre compte n'est pas connecté au serveur de données."
+    if rayon not in user["rayons"]:
+        if not user["rayons"]:
+            return (
+                f"Accès refusé : aucun rayon n'est associé à votre compte "
+                f"({user['email'] or 'email inconnu'}). Contactez l'administrateur pour "
+                "vous rattacher à un rayon."
+            )
+        rayo = ", ".join(user["rayons"])
+        return (
+            f"Accès refusé : vous n'êtes pas gestionnaire du rayon `{rayon}`. "
+            f"Vos rayons autorisés : {rayo}."
+        )
+    return None
+
+
+def _guard_rayon(rayon: str):
+    err = _check_rayon(rayon)
+    if err:
+        raise ValueError(err)
+
+
+@mcp.tool()
+def gamme_mon_rayon() -> str:
+    """Rayons dont le gestionnaire connecté est autorisé (id + libellé). À appeler
+    au premier besoin de données : ne jamais deviner ni utiliser un autre rayon."""
+    user = _current_user()
+    if user is None:
+        return "Authentification requise : votre compte n'est pas connecté au serveur de données."
+    if not user["rayons"]:
+        return (
+            f"Aucun rayon associé à votre compte ({user['email'] or 'email inconnu'}). "
+            "Contactez l'administrateur pour vous rattacher à un rayon."
+        )
+    return json.dumps(
+        [{"id": rid, "libelle": config.rayon_libelle(rid)} for rid in user["rayons"]],
+        ensure_ascii=False,
+        indent=2,
+    )
+
+
 @mcp.tool()
 def gamme_rayons() -> str:
-    """Liste des rayons configurés (id, libellé, gestionnaire)."""
-    return json.dumps(config.rayons(), ensure_ascii=False, indent=2)
+    """Liste des rayons configurés (id + libellé)."""
+    return json.dumps(
+        {rid: {"libelle": meta.get("libelle", rid)} for rid, meta in config.rayons().items()},
+        ensure_ascii=False,
+        indent=2,
+    )
 
 
 @mcp.tool()
 def gamme_import_file(path: str, rayon: str) -> str:
     """Importe un fichier de gamme (.xlsx, .xlsm, .csv). path = chemin du fichier
     (si l'utilisateur l'a déposé dans le chat, le chemin commence par /home/uploads/
-    ou /app/storage/). rayon = identifiant du rayon (ex: epicerie-salee). Génère les
-    3 rapports (md, html, story mode) et renvoie le résumé."""
+    ou /app/storage/). rayon = identifiant du rayon (ex: epicerie-salee). Les données
+    sont enregistrées et le rapport est consultable dans le dashboard story mode."""
+    _guard_rayon(rayon)
     if rayon not in config.rayon_ids():
         return f"Rayon inconnu : {rayon}. Rayons disponibles : {', '.join(config.rayon_ids())}"
     local = config.map_nao_storage_path(path)
@@ -72,8 +142,8 @@ def gamme_import_file(path: str, rayon: str) -> str:
     if res.get("ok"):
         jour = res["resume"].get("jour")
         out += (
-            f"\n\n📄 Rapport classique : `docs/rapports/rapport_{rayon}_{jour}.md`"
-            f"\n🎬 Story mode : `docs/rapports/rapport_story_{rayon}_{jour}.html` (à ouvrir dans le navigateur)"
+            f"\n\n🎬 **Story mode (dashboard interactif)** : `/story/?jour={jour}&rayon={rayon}`"
+            f" — URL publique : `https://<domaine>/story/?jour={jour}&rayon={rayon}`"
         )
     return out
 
@@ -116,6 +186,7 @@ def gamme_etiquettes(path: str, copies: int = 1, taille: str = "standard") -> st
 @mcp.tool()
 def gamme_rapports(rayon: str, limit: int = 5) -> str:
     """Derniers rapports générés pour un rayon, avec leurs indicateurs clés."""
+    _guard_rayon(rayon)
     with db.lock_conn() as conn:
         rows = conn.execute(
             "SELECT jour, resume_json FROM rapports WHERE rayon = ? ORDER BY id DESC LIMIT ?",
@@ -147,6 +218,7 @@ def gamme_rapports(rayon: str, limit: int = 5) -> str:
 def gamme_negatifs(rayon: str, statut: str = "") -> str:
     """Stocks négatifs du dernier import d'un rayon. statut optionnel :
     nouveau | persistant | persistant_aggrave | persistant_stable | persistant_ameliore."""
+    _guard_rayon(rayon)
     with db.lock_conn() as conn:
         row = conn.execute(
             "SELECT MAX(id) AS id FROM imports WHERE rayon = ? AND statut = 'ok'", (rayon,)
@@ -190,6 +262,7 @@ def gamme_negatifs(rayon: str, statut: str = "") -> str:
 def gamme_article(code: int, rayon: str) -> str:
     """Historique complet d'un article (stock, prix, couverture) + passages en
     stock négatif + compensateurs proposés."""
+    _guard_rayon(rayon)
     with db.lock_conn() as conn:
         hist = [dict(r) for r in conn.execute(
             "SELECT h.jour, h.stock, h.px_revient, h.px_vente, h.couv, h.marge_pct, h.libelle "
@@ -209,6 +282,7 @@ def gamme_article(code: int, rayon: str) -> str:
 @mcp.tool()
 def gamme_anomalies(rayon: str, limit: int = 50) -> str:
     """Anomalies du dernier import (marges négatives, chutes/hausses de stock, promos)."""
+    _guard_rayon(rayon)
     with db.lock_conn() as conn:
         row = conn.execute(
             "SELECT MAX(id) AS id FROM imports WHERE rayon = ? AND statut = 'ok'", (rayon,)
@@ -223,16 +297,6 @@ def gamme_anomalies(rayon: str, limit: int = 50) -> str:
             "SELECT code, type, description, valeur_j1, valeur_j FROM anomalies "
             "WHERE import_id = ? ORDER BY id LIMIT ?", (row["id"], limit)).fetchall()]
     return json.dumps(rows, ensure_ascii=False, indent=2)
-
-
-@mcp.tool()
-def gamme_rapport_text(rayon: str, jour: str) -> str:
-    """Contenu texte complet du rapport quotidien d'un rayon pour un jour donné
-    (au format Markdown)."""
-    p = os.path.join(config.rayon_rapports_dir(rayon, jour), "rapport.md")
-    if not os.path.exists(p):
-        return f"Rapport introuvable pour {rayon} / {jour}."
-    return open(p, encoding="utf-8").read()
 
 
 def streamable_app():

@@ -168,12 +168,14 @@ def insert_snapshot(conn, import_id, rayon, jour, df):
 
 
 def get_previous_import(conn, import_id):
-    row = conn.execute("SELECT rayon FROM imports WHERE id = ?", (import_id,)).fetchone()
+    row = conn.execute("SELECT rayon, jour FROM imports WHERE id = ?", (import_id,)).fetchone()
     if row is None:
         return None
+    # Comparaison J/J-1 : on ignore les autres imports du MÊME jour (un fichier
+    # ré-importé dans la journée ne doit jamais servir de référence J-1).
     prev = conn.execute(
-        "SELECT id FROM imports WHERE id < ? AND rayon = ? AND statut IN ('ok','baseline') ORDER BY id DESC LIMIT 1",
-        (import_id, row["rayon"]),
+        "SELECT id FROM imports WHERE id < ? AND rayon = ? AND jour < ? AND statut IN ('ok','baseline') ORDER BY id DESC LIMIT 1",
+        (import_id, row["rayon"], row["jour"]),
     ).fetchone()
     return prev["id"] if prev else None
 

@@ -105,6 +105,11 @@ def score_candidate(neg, cand):
 
 
 def compensate(df, negative_codes, negative_libelles=None):
+    """Analyse LLM des compensateurs. Retourne (results, errors) :
+    - results : {code_negatif: [compensateurs...]} (chunks de 8 articles) ;
+    - errors  : liste de messages pour les lots sans réponse exploitable —
+      remontés comme llm_error dans le résumé (visibles dans le dashboard),
+      jamais confondus avec « aucun compensateur trouvé »."""
     candidates, neg_info = prefilter(df, negative_codes)
     lib_map = {d["Code"]: d.get("Libellé") for d in df.to_dict("records") if d["Code"] not in negative_codes}
     for code in negative_codes:
@@ -112,6 +117,7 @@ def compensate(df, negative_codes, negative_libelles=None):
             cand["libelle"] = lib_map.get(cand["code"])
 
     results = {}
+    errors = []
     chunks = [negative_codes[i:i + 8] for i in range(0, len(negative_codes), 8)]
     for chunk in chunks:
         payload = []
@@ -133,12 +139,19 @@ def compensate(df, negative_codes, negative_libelles=None):
                 ],
             })
         user_msg = json.dumps({"articles": payload}, ensure_ascii=False)
-        content = llm.chat_completion([
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_msg},
-        ])
+        try:
+            content = llm.chat_completion([
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_msg},
+            ])
+        except Exception as e:
+            errors.append(f"lot {chunk}: {e}")
+            for code in chunk:
+                results[code] = []
+            continue
         parsed = llm.parse_json(content)
         if not parsed or "articles" not in parsed:
+            errors.append(f"lot {chunk}: réponse LLM non parsable")
             for code in chunk:
                 results[code] = []
             continue
@@ -168,4 +181,4 @@ def compensate(df, negative_codes, negative_libelles=None):
                         "couv": None, "score": None, "confiance": "aucun",
                         "justification": art.get("raison_aucun") or "Aucun compensateur trouvé"}]
             results[code] = out
-    return results
+    return results, errors

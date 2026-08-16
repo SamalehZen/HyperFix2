@@ -8,7 +8,6 @@ import pandas as pd
 
 from . import config
 from . import db
-from . import report as report_mod
 from . import compensation as comp_mod
 
 
@@ -93,6 +92,20 @@ def run_import(path, rayon=None, force_jour=None, baseline=False):
             db.create_import(conn, rayon, force_jour or jour_today(), os.path.basename(path), h, "erreur", message=err)
         return {"ok": False, "erreur": err, "rayon": rayon}
 
+    # Dédoublonnage : un fichier déjà importé avec succès (hash identique) n'est
+    # PAS ré-importé — on renvoie le résumé existant (évite les comparaisons J/J).
+    with db.lock_conn() as conn:
+        if db.has_import_with_hash(conn, h):
+            prev = conn.execute(
+                "SELECT jour, resume_json FROM rapports WHERE import_id = "
+                "(SELECT id FROM imports WHERE hash_sha256 = ? AND statut = 'ok' ORDER BY id DESC LIMIT 1)",
+                (h,),
+            ).fetchone()
+            if prev is not None:
+                resume = json.loads(prev["resume_json"] or "{}")
+                resume["deja_importe"] = True
+                return {"ok": True, "resume": resume, "rayon": rayon}
+
     jour = force_jour or jour_from_filename(path) or jour_today()
     archive_path, h = archive_file(path, jour, rayon)
     nb = int(len(df))
@@ -120,8 +133,12 @@ def first_import_report(conn, import_id, rayon, jour, nb, archive_path):
         (import_id,),
     ).fetchall()
     neg_ref = [dict(r) for r in neg_ref]
-    md_path, html_path, story_path = report_mod.write_report(conn, import_id, rayon, jour, nb, None, [], negatifs,
-                                                             [], neg_ref, {}, [])
+    for r in neg_ref:
+        db.record_negatif(
+            conn, import_id, rayon, jour, r["code"], None, r["stock"], None,
+            "nouveau", 1, jour, 1, "critique" if r["stock"] <= -10 else "important",
+        )
+    negatifs = list_negatifs(conn, import_id)
     resume = {
         "jour": jour, "nb_articles": nb, "baseline": True, "rayon": rayon,
         "nouveaux_negatifs": len(neg_ref), "persistants": 0, "corriges": 0, "anomalies": 0,
@@ -129,7 +146,7 @@ def first_import_report(conn, import_id, rayon, jour, nb, archive_path):
         "message": "Premier import : snapshot de base enregistré, aucune comparaison (pas de J-1). "
                    f"{len(neg_ref)} articles présents en stock négatif dans le fichier de référence.",
     }
-    db.record_rapport(conn, import_id, rayon, jour, md_path, html_path, resume, chemin_story=story_path)
+    db.record_rapport(conn, import_id, rayon, jour, None, None, resume)
     return resume
 
 
@@ -158,8 +175,13 @@ def full_analysis(conn, import_id, rayon, jour, df, prev_id, nb, archive_path):
             "stock_j": stock_j, "stock_j1": stock_j1, "variation": variation,
         })
 
-    negative_codes = [c["code"] for c in compared if c["stock_j"] is not None and c["stock_j"] < 0]
-    history = db.load_history_for_codes(conn, import_id, negative_codes)
+    # Historique chargé pour TOUS les articles avec un statut (négatifs du jour
+    # ET corrigés redevenus positifs) — sinon les corrigés perdent leur vraie
+    # première apparition / durée / nombre d'occurrences.
+    tracked_codes = [c["code"] for c in compared
+                     if (c["stock_j"] is not None and c["stock_j"] < 0)
+                     or (c["stock_j1"] is not None and c["stock_j1"] < 0)]
+    history = db.load_history_for_codes(conn, import_id, tracked_codes)
 
     negatifs = []
     for c in compared:
@@ -216,8 +238,12 @@ def complete_analysis(import_id, rayon, jour, df, prev_id, nb, negatifs, anomali
     llm_error = None
     if llm_scope:
         try:
-            compensations = comp_mod.compensate(df, sorted(n["code"] for n in llm_scope),
-                                                [n["libelle"] for n in llm_scope])
+            compensations, comp_errors = comp_mod.compensate(
+                df, sorted(n["code"] for n in llm_scope),
+                [n["libelle"] for n in llm_scope],
+            )
+            if comp_errors:
+                llm_error = f"{len(comp_errors)} lot(s) LLM sans réponse exploitable — " + " | ".join(comp_errors[:3])
         except Exception as e:
             llm_error = str(e)
 
@@ -242,10 +268,6 @@ def complete_analysis(import_id, rayon, jour, df, prev_id, nb, negatifs, anomali
             n["justification"] = "Aucun compensateur trouvé"
 
     with db.lock_conn() as conn:
-        md_path, html_path, story_path = report_mod.write_report(
-            conn, import_id, rayon, jour, nb, prev_id, negatifs, list_negatifs(conn, import_id),
-            anomalies, compared, {"llm_error": llm_error}, compensations,
-        )
         resume = {
             "jour": jour, "nb_articles": nb, "baseline": False, "rayon": rayon,
             "nouveaux_negatifs": len([n for n in negatifs if n["statut"] == "nouveau"]),
@@ -259,7 +281,7 @@ def complete_analysis(import_id, rayon, jour, df, prev_id, nb, negatifs, anomali
             "importants": len([n for n in negatifs if n["priorite"] == "important"]),
             "llm_error": llm_error,
         }
-        db.record_rapport(conn, import_id, rayon, jour, md_path, html_path, resume, chemin_story=story_path)
+        db.record_rapport(conn, import_id, rayon, jour, None, None, resume)
     return resume
 
 

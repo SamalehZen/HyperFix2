@@ -4,28 +4,57 @@ import requests
 
 from . import config
 
+# deepseek-v4-flash est un modèle raisonneur : sans ce paramètre, le budget
+# max_tokens est consommé par le raisonnement interne et la réponse finale
+# arrive vide (finish_reason=length, content=""). On désactive donc le
+# raisonnement pour les appels machine (compensateurs) : ~1 100 tokens au lieu
+# de ~21 000, réponse complète garantie (testé 16/08/2026).
+# Le chat nao n'utilise PAS ce module (config nao_config.yaml séparée).
+_THINKING_DISABLED = {"thinking": {"type": "disabled"}}
+
 
 def chat_completion(messages, temperature=0.1, max_tokens=8192):
+    """Appel chat/completions avec raisonnement désactivé + garde-fous :
+    - réponse vide/coupée (finish_reason=length) → 1 retry à budget doublé ;
+    - API qui rejette le paramètre thinking (HTTP 400, modèle futur) → retry sans.
+    Lève Exception si toutes les tentatives échouent."""
     url = f"{config.BASE_URL.rstrip('/')}/chat/completions"
-    payload = {
-        "model": config.MODEL,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
+    headers = {
+        "Authorization": f"Bearer {config.API_KEY}",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64 x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36",
     }
-    resp = requests.post(
-        url,
-        json=payload,
-        headers={
-            "Authorization": f"Bearer {config.API_KEY}",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36",
-        },
-        timeout=300,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    content = data["choices"][0]["message"]["content"]
-    return content
+    attempts = [
+        {**_THINKING_DISABLED, "max_tokens": max_tokens},
+        {**_THINKING_DISABLED, "max_tokens": max_tokens * 2},
+        {"max_tokens": max_tokens * 2},
+    ]
+    last_error = None
+    for opts in attempts:
+        payload = {
+            "model": config.MODEL,
+            "messages": messages,
+            "temperature": temperature,
+            **opts,
+        }
+        try:
+            resp = requests.post(url, json=payload, headers=headers, timeout=300)
+        except requests.RequestException as e:
+            last_error = f"réseau: {e}"
+            continue
+        if resp.status_code == 400 and "thinking" in opts:
+            last_error = f"HTTP 400 (paramètre thinking rejeté): {resp.text[:200]}"
+            continue
+        resp.raise_for_status()
+        data = resp.json()
+        choice = (data.get("choices") or [{}])[0]
+        content = (choice.get("message") or {}).get("content") or ""
+        if content.strip():
+            return content
+        last_error = (
+            f"réponse vide (finish_reason={choice.get('finish_reason')}, "
+            f"tokens={data.get('usage', {}).get('completion_tokens')})"
+        )
+    raise RuntimeError(f"LLM: aucune réponse exploitable — {last_error}")
 
 
 def parse_json(text):

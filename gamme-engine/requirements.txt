@@ -10,3 +10,5 @@ mcp>=1.15,<2
 reportlab
 python-barcode
 Pillow
+PyJWT[crypto]>=2.8
+cryptography>=42.0
