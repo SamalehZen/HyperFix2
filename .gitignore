@@ -22,3 +22,6 @@ nao-gamme/docs/images/
 
 # Divers
 .DS_Store
+
+# Preview temporaire du dashboard open-source (clone hors repo)
+dashboard-preview/

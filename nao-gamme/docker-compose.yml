@@ -107,6 +107,15 @@ services:
             - ./storage:/storage/gamme/uploads
         restart: unless-stopped
 
+    # Preview temporaire : dashboard open-source avec données mock du 17/08
+    # (choix UI/UX en cours — ne pas utiliser en production)
+    dashboard-preview:
+        build: ../dashboard-preview
+        container_name: dashboard_preview
+        ports:
+            - '127.0.0.1:3001:3000'
+        restart: unless-stopped
+
 volumes:
     nao_gamme_postgres_data:
     caddy_config:
