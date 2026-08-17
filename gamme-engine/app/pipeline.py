@@ -35,11 +35,19 @@ def jour_from_filename(path):
 
 def read_table(path):
     if path.lower().endswith(".csv"):
+        # Un mauvais séparateur ne lève pas toujours d'erreur (le CSV devient
+        # une seule colonne) : on garde la lecture qui produit le plus de
+        # colonnes, puis le sniffing Python en dernier recours.
+        best, best_n = None, -1
         for sep in (",", ";"):
             try:
-                return pd.read_csv(path, sep=sep, dtype=str)
+                df = pd.read_csv(path, sep=sep, dtype=str)
+                if len(df.columns) > best_n:
+                    best, best_n = df, len(df.columns)
             except Exception:
                 continue
+        if best is not None:
+            return best
         return pd.read_csv(path, sep=None, engine="python", dtype=str)
     xl = pd.ExcelFile(path)
     if config.SHEET_NAME not in xl.sheet_names:
@@ -89,40 +97,65 @@ def run_import(path, rayon=None, force_jour=None, baseline=False):
     h = db.sha256_file(path)
     if err:
         with db.lock_conn() as conn:
-            db.create_import(conn, rayon, force_jour or jour_today(), os.path.basename(path), h, "erreur", message=err)
+            # Ne pas empiler les lignes 'erreur' pour un même fichier re-scanné.
+            if db.import_statut_for_hash(conn, h, rayon) is None:
+                db.create_import(conn, rayon, force_jour or jour_today(), os.path.basename(path), h, "erreur", message=err)
         return {"ok": False, "erreur": err, "rayon": rayon}
 
-    # Dédoublonnage : un fichier déjà importé avec succès (hash identique) n'est
-    # PAS ré-importé — on renvoie le résumé existant (évite les comparaisons J/J).
+    # Dédoublonnage par hash : seuls les imports RÉUSSIS avec rapport comptent.
+    # Un hash en 'erreur' → refus sans nouvelle ligne. Un hash 'ok' sans rapport
+    # (import interrompu) → marqué erreur puis re-traité normalement.
     with db.lock_conn() as conn:
-        if db.has_import_with_hash(conn, h):
-            prev = conn.execute(
-                "SELECT jour, resume_json FROM rapports WHERE import_id = "
-                "(SELECT id FROM imports WHERE hash_sha256 = ? AND statut = 'ok' ORDER BY id DESC LIMIT 1)",
-                (h,),
-            ).fetchone()
-            if prev is not None:
-                resume = json.loads(prev["resume_json"] or "{}")
-                resume["deja_importe"] = True
-                return {"ok": True, "resume": resume, "rayon": rayon}
+        info = db.import_statut_for_hash(conn, h, rayon)
+        if info is not None:
+            import_id, statut, has_rapport = info
+            if statut == "erreur":
+                return {"ok": False, "erreur": "Fichier déjà refusé lors d'un passage précédent", "rayon": rayon}
+            if statut in ("ok", "baseline") and has_rapport:
+                prev = conn.execute(
+                    "SELECT jour, resume_json FROM rapports WHERE import_id = ?",
+                    (import_id,),
+                ).fetchone()
+                if prev is not None:
+                    resume = json.loads(prev["resume_json"] or "{}")
+                    resume["deja_importe"] = True
+                    return {"ok": True, "resume": resume, "rayon": rayon}
+            if statut in ("ok", "baseline") and not has_rapport:
+                db.set_import_statut(conn, import_id, "erreur", "Import incomplet (rapport absent) — re-traitement")
 
     jour = force_jour or jour_from_filename(path) or jour_today()
     archive_path, h = archive_file(path, jour, rayon)
     nb = int(len(df))
 
-    with db.lock_conn() as conn:
-        import_id = db.create_import(conn, rayon, jour, os.path.basename(path), h, "ok", nb_articles=nb, archive_path=archive_path)
-        db.insert_snapshot(conn, import_id, rayon, jour, df)
-        prev_id = db.get_previous_import(conn, import_id)
-        if prev_id is None:
-            resume = first_import_report(conn, import_id, rayon, jour, nb, archive_path)
-        else:
-            negatifs, anomalies, compared = full_analysis(conn, import_id, rayon, jour, df, prev_id, nb, archive_path)
+    # Atomicité : si quoi que ce soit échoue après la création de l'import,
+    # on le marque 'erreur' (au lieu de le laisser 'ok' sans compensateurs ni
+    # rapport) et le watcher garde le fichier pour re-traitement.
+    import_id = None
+    prev_id = None
+    try:
+        with db.lock_conn() as conn:
+            import_id = db.create_import(conn, rayon, jour, os.path.basename(path), h, "ok", nb_articles=nb, archive_path=archive_path)
+            db.insert_snapshot(conn, import_id, rayon, jour, df)
+            prev_id = db.get_previous_import(conn, import_id)
+            if prev_id is None:
+                resume = first_import_report(conn, import_id, rayon, jour, nb, archive_path)
+            else:
+                negatifs, anomalies, compared = full_analysis(conn, import_id, rayon, jour, df, prev_id, nb, archive_path)
 
-    if prev_id is not None:
-        resume = complete_analysis(import_id, rayon, jour, df, prev_id, nb, negatifs, anomalies, compared)
+        if prev_id is not None:
+            resume = complete_analysis(import_id, rayon, jour, df, prev_id, nb, negatifs, anomalies, compared)
+    except Exception as e:
+        if import_id is not None:
+            with db.lock_conn() as conn:
+                db.set_import_statut(conn, import_id, "erreur", f"Import interrompu : {e}")
+        return {"ok": False, "erreur": f"Import interrompu : {e}", "rayon": rayon}
 
-    rebuild_duckdb(df, rayon)
+    # La reconstruction DuckDB est un bonus en aval : elle ne doit jamais
+    # invalider un import déjà abouti.
+    try:
+        rebuild_duckdb(df, rayon)
+    except Exception as e:
+        print(f"[pipeline] ✗ reconstruction duckdb impossible (import OK): {e}")
     return {"ok": True, "resume": resume, "rayon": rayon}
 
 
@@ -236,9 +269,10 @@ def complete_analysis(import_id, rayon, jour, df, prev_id, nb, negatifs, anomali
     llm_scope = [n for n in negatifs if n["llm_analyse"]]
     compensations = {}
     llm_error = None
+    failed_codes = set()
     if llm_scope:
         try:
-            compensations, comp_errors = comp_mod.compensate(
+            compensations, comp_errors, failed_codes = comp_mod.compensate(
                 df, sorted(n["code"] for n in llm_scope),
                 [n["libelle"] for n in llm_scope],
             )
@@ -246,6 +280,21 @@ def complete_analysis(import_id, rayon, jour, df, prev_id, nb, negatifs, anomali
                 llm_error = f"{len(comp_errors)} lot(s) LLM sans réponse exploitable — " + " | ".join(comp_errors[:3])
         except Exception as e:
             llm_error = str(e)
+            failed_codes = {n["code"] for n in llm_scope}
+
+    # Repli sans LLM : chaque article dont le lot a échoué reçoit le meilleur
+    # candidat heuristique (Jaccard + format + prix), confiance 'faible'.
+    # L'import ne dépend donc jamais du LLM pour aboutir.
+    fallback_heuristique = 0
+    for code in sorted(failed_codes):
+        cand = comp_mod.compensateur_heuristique(df, code)
+        if cand:
+            compensations[code] = [cand]
+            fallback_heuristique += 1
+        else:
+            compensations[code] = [{"code": None, "libelle": None, "px_revient": None, "px_vente": None,
+                                    "couv": None, "score": None, "confiance": "aucun",
+                                    "justification": "Aucun compensateur (LLM indisponible et aucun candidat heuristique au-dessus du seuil)"}]
 
     with db.lock_conn() as conn:
         for code, results in compensations.items():
@@ -279,6 +328,7 @@ def complete_analysis(import_id, rayon, jour, df, prev_id, nb, negatifs, anomali
             "non_analyses": len([n for n in negatifs if not n["llm_analyse"]]),
             "critiques": len([n for n in negatifs if n["priorite"] == "critique"]),
             "importants": len([n for n in negatifs if n["priorite"] == "important"]),
+            "fallback_heuristique": fallback_heuristique,
             "llm_error": llm_error,
         }
         db.record_rapport(conn, import_id, rayon, jour, None, None, resume)

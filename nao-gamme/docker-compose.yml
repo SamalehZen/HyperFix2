@@ -99,6 +99,8 @@ services:
             GAMME_MAX_LLM_ARTICLES: ${GAMME_MAX_LLM_ARTICLES:-40}
             GAMME_DATA_DIR: /storage/gamme
             NAO_PROJECT_DIR: /app/nao-project
+            # Alertes Telegram (échecs d'import) — même token que le bot nao
+            TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
         volumes:
             - /storage/gamme:/storage/gamme
             - .:/app/nao-project

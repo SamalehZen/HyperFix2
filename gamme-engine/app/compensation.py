@@ -104,12 +104,38 @@ def score_candidate(neg, cand):
     }
 
 
+def compensateur_heuristique(df, code_negatif):
+    """Repli sans LLM : meilleur candidat du scoring heuristique (Jaccard +
+    format + prix). Renvoie un dict compensateur (confiance 'faible') si le
+    score atteint FALLBACK_SCORE_SEUIL, sinon None."""
+    candidates, _neg_info = prefilter(df, [code_negatif])
+    cands = candidates.get(code_negatif, [])
+    if not cands:
+        return None
+    best = cands[0]
+    if best["score"] < config.FALLBACK_SCORE_SEUIL:
+        return None
+    return {
+        "code": best["code"],
+        "libelle": best["libelle"],
+        "px_revient": best["px_revient"],
+        "px_vente": best["px_vente"],
+        "couv": best["couv"],
+        "stock": best["stock"],
+        "score": best["score"],
+        "confiance": "faible",
+        "justification": "Compensateur heuristique (similarité libellé/format/prix) — LLM indisponible",
+    }
+
+
 def compensate(df, negative_codes, negative_libelles=None):
-    """Analyse LLM des compensateurs. Retourne (results, errors) :
-    - results : {code_negatif: [compensateurs...]} (chunks de 8 articles) ;
-    - errors  : liste de messages pour les lots sans réponse exploitable —
+    """Analyse LLM des compensateurs. Retourne (results, errors, failed_codes) :
+    - results     : {code_negatif: [compensateurs...]} (chunks de 8 articles) ;
+    - errors      : liste de messages pour les lots sans réponse exploitable —
       remontés comme llm_error dans le résumé (visibles dans le dashboard),
-      jamais confondus avec « aucun compensateur trouvé »."""
+      jamais confondus avec « aucun compensateur trouvé » ;
+    - failed_codes: ensemble des codes dont le lot LLM a échoué (à traiter
+      par compensateur_heuristique)."""
     candidates, neg_info = prefilter(df, negative_codes)
     lib_map = {d["Code"]: d.get("Libellé") for d in df.to_dict("records") if d["Code"] not in negative_codes}
     for code in negative_codes:
@@ -118,6 +144,7 @@ def compensate(df, negative_codes, negative_libelles=None):
 
     results = {}
     errors = []
+    failed_codes = set()
     chunks = [negative_codes[i:i + 8] for i in range(0, len(negative_codes), 8)]
     for chunk in chunks:
         payload = []
@@ -146,12 +173,14 @@ def compensate(df, negative_codes, negative_libelles=None):
             ])
         except Exception as e:
             errors.append(f"lot {chunk}: {e}")
+            failed_codes.update(chunk)
             for code in chunk:
                 results[code] = []
             continue
         parsed = llm.parse_json(content)
         if not parsed or "articles" not in parsed:
             errors.append(f"lot {chunk}: réponse LLM non parsable")
+            failed_codes.update(chunk)
             for code in chunk:
                 results[code] = []
             continue
@@ -182,4 +211,4 @@ def compensate(df, negative_codes, negative_libelles=None):
                         "couv": None, "score": None, "confiance": "aucun",
                         "justification": art.get("raison_aucun") or "Aucun compensateur trouvé"}]
             results[code] = out
-    return results, errors
+    return results, errors, failed_codes

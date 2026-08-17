@@ -14,8 +14,17 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
+COPY tests ./tests
 COPY --from=story-ui /ui/dist ./story-ui/dist
 
+# Utilisateur non privilégié (uid 1000 = propriétaire des volumes hôte)
+RUN useradd --uid 1000 --no-create-home --shell /bin/false gamme \
+    && chown -R gamme:gamme /app
+USER gamme
+
 EXPOSE 8010
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8010/healthz', timeout=5).status == 200 else 1)"
 
 CMD ["python", "-m", "app.main"]

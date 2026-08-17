@@ -12,6 +12,11 @@ DEPOT_DIR = os.path.join(DATA_DIR, "depot")
 IMPORTS_DIR = os.path.join(DATA_DIR, "imports")
 RAPPORTS_DIR = os.path.join(DATA_DIR, "rapports")
 DB_PATH = os.path.join(DATA_DIR, "historique.db")
+BACKUP_DIR = os.getenv("GAMME_BACKUP_DIR", os.path.join(DATA_DIR, "backups"))
+BACKUP_RETENTION_DAYS = int(os.getenv("GAMME_BACKUP_RETENTION_DAYS", "30"))
+
+ALERT_CHATS_FILE = os.path.join(DATA_DIR, "alert_chats.json")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 
 NAO_STORAGE_PREFIX = "/app/storage"
 NAO_HOME_PREFIX = "/home/"
@@ -31,6 +36,7 @@ REQUIRED_COLUMNS = [
 POLL_SECONDS = int(os.getenv("GAMME_POLL_SECONDS", "60"))
 TOP_CANDIDATES = int(os.getenv("GAMME_TOP_CANDIDATES", "15"))
 MAX_LLM_ARTICLES = int(os.getenv("GAMME_MAX_LLM_ARTICLES", "40"))
+FALLBACK_SCORE_SEUIL = float(os.getenv("GAMME_FALLBACK_SCORE_SEUIL", "30"))
 CHUTE_SEUIL = int(os.getenv("GAMME_CHUTE_SEUIL", "200"))
 HAUSSE_SEUIL = int(os.getenv("GAMME_HAUSSE_SEUIL", "200"))
 
@@ -61,6 +67,10 @@ def rayon_libelle(rayon):
 
 def rayon_depot(rayon):
     return os.path.join(DEPOT_DIR, rayon)
+
+
+def rayon_depot_erreurs(rayon):
+    return os.path.join(rayon_depot(rayon), "erreurs")
 
 
 def rayon_imports_dir(rayon, jour):

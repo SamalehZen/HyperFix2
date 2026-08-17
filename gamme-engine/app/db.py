@@ -124,6 +124,10 @@ def init_db():
                 elif col == "chemin_story":
                     if "chemin_story" not in existing:
                         conn.execute("ALTER TABLE rapports ADD COLUMN chemin_story TEXT")
+        for table in ("negatifs_journaliers", "compensations", "anomalies", "rapports"):
+            conn.execute(
+                f"CREATE INDEX IF NOT EXISTS idx_{table}_rayon_jour ON {table}(rayon, jour)"
+            )
 
 
 @contextmanager
@@ -246,8 +250,41 @@ def sha256_file(path):
     return h.hexdigest()
 
 
-def has_import_with_hash(conn, h):
+def has_import_with_hash(conn, h, statut_ok_only=False):
+    """statut_ok_only=True : ne compte que les imports réussis (ok/baseline).
+    Un fichier refusé (erreur) ne doit JAMAIS être considéré « déjà importé »."""
+    if statut_ok_only:
+        return conn.execute(
+            "SELECT 1 FROM imports WHERE hash_sha256 = ? AND statut IN ('ok','baseline')",
+            (h,),
+        ).fetchone() is not None
     return conn.execute("SELECT 1 FROM imports WHERE hash_sha256 = ?", (h,)).fetchone() is not None
+
+
+def import_statut_for_hash(conn, h, rayon=None):
+    """Renvoie (import_id, statut, has_rapport) du dernier import pour ce hash,
+    ou None si inconnu. has_rapport permet de détecter un import « ok » orphelin
+    (interrompu avant l'écriture du rapport) et de le re-traiter."""
+    q = "SELECT id, statut FROM imports WHERE hash_sha256 = ?"
+    args = [h]
+    if rayon:
+        q += " AND rayon = ?"
+        args.append(rayon)
+    q += " ORDER BY id DESC LIMIT 1"
+    row = conn.execute(q, args).fetchone()
+    if row is None:
+        return None
+    has_rapport = conn.execute(
+        "SELECT 1 FROM rapports WHERE import_id = ?", (row["id"],)
+    ).fetchone() is not None
+    return row["id"], row["statut"], has_rapport
+
+
+def set_import_statut(conn, import_id, statut, message=None):
+    conn.execute(
+        "UPDATE imports SET statut = ?, message = ? WHERE id = ?",
+        (statut, message, import_id),
+    )
 
 
 def datetime_now():

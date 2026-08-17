@@ -9,7 +9,9 @@ from datetime import datetime
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, FileResponse
 
+from . import alerts
 from . import auth
+from . import backup
 from . import config
 from . import db
 from . import pipeline
@@ -23,6 +25,7 @@ async def _lifespan(app):
     threading.Thread(target=bootstrap_baseline, daemon=True).start()
     threading.Thread(target=watcher_loop, daemon=True).start()
     threading.Thread(target=labels_cleanup_loop, daemon=True).start()
+    backup.start_backup_thread()
     mgr = getattr(mcp_server.mcp, "_session_manager", None)
     if mgr is not None:
         async with mgr.run():
@@ -83,7 +86,7 @@ def bootstrap_baseline():
             return
         h = db.sha256_file(baseline)
         with db.lock_conn() as conn:
-            if db.has_import_with_hash(conn, h):
+            if db.has_import_with_hash(conn, h, statut_ok_only=True):
                 return
         jour = datetime.fromtimestamp(os.path.getmtime(baseline)).strftime("%Y-%m-%d")
         try:
@@ -93,14 +96,37 @@ def bootstrap_baseline():
             print(f"[bootstrap] Échec baseline: {e}")
 
 
+def _move_to_erreurs(path, rayon, filename, reason):
+    dest_dir = config.rayon_depot_erreurs(rayon)
+    os.makedirs(dest_dir, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dest = os.path.join(dest_dir, f"{ts}_{filename}")
+    try:
+        shutil.move(path, dest)
+        print(f"[watcher] → {filename} déplacé vers erreurs/ ({reason})")
+        return dest
+    except Exception as e:
+        print(f"[watcher] ✗ déplacement vers erreurs/ impossible: {e}")
+        return None
+
+
 def process_file(path, rayon):
     filename = os.path.basename(path)
     h = db.sha256_file(path)
     with db.lock_conn() as conn:
-        if db.has_import_with_hash(conn, h):
-            os.remove(path)
-            print(f"[watcher] {filename} déjà importé, retiré du dépôt.")
-            return
+        info = db.import_statut_for_hash(conn, h, rayon)
+        if info is not None:
+            import_id, statut, has_rapport = info
+            if statut == "erreur":
+                # Fichier déjà refusé : ne plus le re-tenter ni le supprimer.
+                _move_to_erreurs(path, rayon, filename, "déjà refusé (hash connu en erreur)")
+                return
+            if statut in ("ok", "baseline") and has_rapport:
+                os.remove(path)
+                print(f"[watcher] {filename} déjà importé, retiré du dépôt.")
+                return
+            # statut ok/baseline SANS rapport = import interrompu : run_import
+            # le marque 'erreur' puis le re-traite normalement.
     if path in PROCESSING:
         return
     PROCESSING.add(path)
@@ -110,9 +136,17 @@ def process_file(path, rayon):
             print(f"[watcher] ✓ Import réussi {filename}: {json.dumps(res['resume'], ensure_ascii=False)}")
             os.remove(path)
         else:
-            print(f"[watcher] ✗ Import refusé {filename}: {res.get('erreur')}")
+            err = res.get("erreur") or "raison inconnue"
+            print(f"[watcher] ✗ Import refusé {filename}: {err}")
+            _move_to_erreurs(path, rayon, filename, err)
+            alerts.send_telegram(
+                f"❌ Import refusé ({rayon}) — {filename}\nRaison : {err}\n"
+                f"Fichier déplacé vers depot/{rayon}/erreurs/ (vérifiable via /status ou le chat)."
+            )
     except Exception as e:
         print(f"[watcher] ✗ Erreur {filename}: {e}")
+        _move_to_erreurs(path, rayon, filename, str(e))
+        alerts.send_telegram(f"❌ Erreur inattendue ({rayon}) — {filename} : {e}")
     finally:
         PROCESSING.discard(path)
 
