@@ -23,5 +23,8 @@ nao-gamme/docs/images/
 # Divers
 .DS_Store
 
-# Preview temporaire du dashboard open-source (clone hors repo)
-dashboard-preview/
+# Preview du dashboard (code source versionné, artefacts ignorés)
+dashboard-preview/node_modules/
+dashboard-preview/.next/
+dashboard-preview/tsconfig.tsbuildinfo
+dashboard-preview/next-env.d.ts
