@@ -170,6 +170,7 @@ def build_story_data(conn, rayon, jour):
         "nb_occurrences": n["nb_occurrences"],
         "compensateur": None, "confiance": "aucun",
         "justification": "Stock redevenu positif", "hist7": hist.get(n["code"], []),
+        "compensateurs": [],
     } for n in nb_negatifs if n["statut"] == "corrige"]
 
     top_neg = sorted(actifs, key=lambda n: (n["stock_j"] or 0) * (n["px_revient"] or 0))[:10]
@@ -262,7 +263,7 @@ def story_stats(jour: str, rayon: str = config.RAYON):
         en_stock = sum(1 for r in stock if (r["stock"] or 0) > 0)
         stock_bas = sum(
             1 for r in stock
-            if (r["stock"] or 0) > 0 and (r["couv"] or 0) <= 7
+            if (r["stock"] or 0) > 0 and r["couv"] is not None and r["couv"] <= 7
         )
         dormants = sum(1 for r in stock if (r["stock"] or 0) > 0 and (r["couv"] or 0) == 999)
         negatifs = sum(1 for r in stock if (r["stock"] or 0) < 0)
