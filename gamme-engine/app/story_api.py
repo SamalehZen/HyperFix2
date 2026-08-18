@@ -218,6 +218,85 @@ def build_story_data(conn, rayon, jour):
     }
 
 
+@router.get("/stats/{jour}")
+def story_stats(jour: str, rayon: str = config.RAYON):
+    """Statistiques complémentaires du jour (valeurs PRMP, santé du stock,
+    % de corrections sous 7 jours) — public, même modèle que story-data."""
+    if rayon not in config.rayon_ids():
+        return JSONResponse({"ok": False, "erreur": f"Rayon inconnu : {rayon}"}, status_code=404)
+    with db.lock_conn() as conn:
+        imp = _latest_import(conn, rayon, jour)
+        if imp is None:
+            return JSONResponse(
+                {"ok": False, "erreur": f"Aucun import pour {rayon} le {jour}"}, status_code=404
+            )
+        import_id = imp["id"]
+
+        totals = conn.execute(
+            "SELECT "
+            "COUNT(*) AS nb_articles, "
+            "COALESCE(SUM(valeur_stock_prmp), 0) AS valeur_stock_prmp "
+            "FROM article_history WHERE import_id = ?",
+            (import_id,),
+        ).fetchone()
+
+        negs = conn.execute(
+            "SELECT n.statut, n.stock_j, h.px_revient FROM negatifs_journaliers n "
+            "LEFT JOIN article_history h ON h.import_id = n.import_id AND h.code = n.code "
+            "WHERE n.import_id = ?",
+            (import_id,),
+        ).fetchall()
+        prmp_passe_negatif = 0.0
+        prmp_corrige = 0.0
+        for n in negs:
+            valeur = abs((n["stock_j"] or 0) * (n["px_revient"] or 0))
+            if n["statut"] == "corrige":
+                prmp_corrige += valeur
+            elif n["statut"] == "nouveau":
+                prmp_passe_negatif += valeur
+
+        stock = conn.execute(
+            "SELECT stock, couv FROM article_history WHERE import_id = ?",
+            (import_id,),
+        ).fetchall()
+        en_stock = sum(1 for r in stock if (r["stock"] or 0) > 0)
+        stock_bas = sum(
+            1 for r in stock
+            if (r["stock"] or 0) > 0 and (r["couv"] or 0) <= 7
+        )
+        dormants = sum(1 for r in stock if (r["stock"] or 0) > 0 and (r["couv"] or 0) == 999)
+        negatifs = sum(1 for r in stock if (r["stock"] or 0) < 0)
+
+        # % des épisodes corrigés en 7 jours ou moins (derniers 90 jours).
+        corrections = conn.execute(
+            "SELECT jours_consecutifs FROM negatifs_journaliers "
+            "WHERE rayon = ? AND statut = 'corrige' AND jour >= ?",
+            (rayon, (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")),
+        ).fetchall()
+        if corrections:
+            corriges_sous_7j = round(
+                100 * sum(1 for c in corrections if (c["jours_consecutifs"] or 0) <= 7)
+                / len(corrections)
+            )
+        else:
+            corriges_sous_7j = None
+
+    return JSONResponse({
+        "ok": True,
+        "rayon": rayon,
+        "jour": jour,
+        "nb_articles": totals["nb_articles"],
+        "valeur_stock_prmp": totals["valeur_stock_prmp"],
+        "prmp_passe_negatif": round(prmp_passe_negatif, 2),
+        "prmp_corrige": round(prmp_corrige, 2),
+        "en_stock": en_stock,
+        "stock_bas": stock_bas,
+        "dormants": dormants,
+        "negatifs": negatifs,
+        "corriges_sous_7j": corriges_sous_7j,
+    })
+
+
 @router.get("/jours")
 def jours(rayon: str = config.RAYON):
     """Jours disponibles (imports OK) pour la navigation de la sidebar."""
