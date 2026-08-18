@@ -22,17 +22,14 @@ lololo.hypeer.cloud {
 	handle /.well-known/oauth-protected-resource* {
 		reverse_proxy gamme-engine:8010
 	}
-	handle /story/* {
-		reverse_proxy gamme-engine:8010
-	}
 	handle /story-data/* {
 		reverse_proxy gamme-engine:8010
 	}
+	handle /story* {
+		reverse_proxy dashboard-preview:3000
+	}
 	handle /healthz {
 		reverse_proxy gamme-engine:8010
-	}
-	handle /preview* {
-		reverse_proxy dashboard-preview:3000
 	}
 	handle {
 		reverse_proxy nao:5005
