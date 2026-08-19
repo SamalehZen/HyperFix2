@@ -80,6 +80,11 @@ export interface GammeSerieJour {
   critiques: number;
 }
 
+export interface GammeSerieAnomalies {
+  types: string[];
+  jours: Array<Record<string, string | number>>;
+}
+
 export interface GammeStory {
   ok: boolean;
   resume: GammeResume;
@@ -87,7 +92,7 @@ export interface GammeStory {
   types_anom: Record<string, number>;
   anomalies: { code: number | null; type: string; description: string | null }[];
   serie_jours: GammeSerieJour[];
-  serie_anomalies: unknown;
+  serie_anomalies: GammeSerieAnomalies;
   negatifs: GammeNegatif[];
   corriges: GammeNegatif[];
 }

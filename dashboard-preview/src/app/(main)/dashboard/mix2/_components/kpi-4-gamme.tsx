@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 
 import type { GammeResume, GammeStats } from "../_lib/gamme";
+import { AnomaliesPanel, type AnomalieRow } from "./anomalies-panel";
 
 function fmtFdj(v: number): string {
   return `${v.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} FDJ`;
@@ -44,23 +45,24 @@ export function Kpi4Gamme({
   stats,
   prevStats,
   resume,
+  anomalies,
 }: {
   stats: GammeStats | null;
   prevStats: GammeStats | null;
   resume: GammeResume | null;
+  anomalies: AnomalieRow[] | null;
 }) {
   const prmpPasse = stats?.prmp_passe_negatif ?? null;
   const prmpCorrige = stats?.prmp_corrige ?? null;
   const ouverts = resume ? resume.nouveaux + resume.persistants : null;
   const prevOuverts = prevStats?.negatifs ?? null;
-  const taux = stats?.corriges_sous_7j ?? null;
 
   return (
     <section className="space-y-5">
       <div className="space-y-1">
         <h2 className="text-3xl tracking-tight">Vue d&apos;ensemble</h2>
         <p className="text-muted-foreground text-sm">
-          Suivez la valeur stock PRMP, les négatifs ouverts et le taux de correction du cycle en cours.
+          Suivez la valeur stock PRMP, les négatifs ouverts et les anomalies du cycle en cours.
         </p>
       </div>
 
@@ -90,7 +92,7 @@ export function Kpi4Gamme({
 
         <Card>
           <CardHeader>
-            <CardDescription>Valeur stock PRMP corrigée</CardDescription>
+            <CardDescription>Manque PRMP comblé</CardDescription>
             <CardAction>
               <ArrowUpRight className="size-4" />
             </CardAction>
@@ -108,6 +110,7 @@ export function Kpi4Gamme({
               </span>{" "}
               <span className="text-muted-foreground">le jour précédent</span>
             </p>
+            <p className="text-xs text-muted-foreground">Manque des articles corrigés (|stock J-1| × PRMP)</p>
           </CardContent>
         </Card>
 
@@ -130,23 +133,7 @@ export function Kpi4Gamme({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardDescription>Taux de correction sous 7 jours</CardDescription>
-            <CardAction>
-              <ArrowUpRight className="size-4" />
-            </CardAction>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex items-center gap-3">
-              <span className="text-3xl leading-none tracking-tight">{taux === null ? "99.9%" : `${taux}%`}</span>
-              <DeltaBadge delta={null} />
-            </div>
-            <p className="text-sm">
-              <span className="text-muted-foreground">des épisodes corrigés en moins d&apos;une semaine</span>
-            </p>
-          </CardContent>
-        </Card>
+        <AnomaliesPanel anomalies={anomalies} count={resume?.anomalies ?? null} />
       </div>
     </section>
   );

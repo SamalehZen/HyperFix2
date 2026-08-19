@@ -200,7 +200,12 @@ export function GammeDashboard() {
       </div>
 
       <div>
-        <Kpi4Gamme stats={stats} prevStats={prev?.stats ?? null} resume={story?.resume ?? null} />
+        <Kpi4Gamme
+          stats={stats}
+          prevStats={prev?.stats ?? null}
+          resume={story?.resume ?? null}
+          anomalies={story?.anomalies ?? null}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
@@ -217,9 +222,8 @@ export function GammeDashboard() {
         </div>
         <div className="h-full xl:col-span-8">
           <RayonTraffic
-            anomalies={story?.resume.anomalies ?? null}
-            articles={story?.resume.nb_articles ?? null}
-            jour={jour}
+            serieAnomalies={story?.serie_anomalies ?? null}
+            serieJours={story?.serie_jours ?? null}
           />
         </div>
 

@@ -242,7 +242,7 @@ def story_stats(jour: str, rayon: str = config.RAYON):
         ).fetchone()
 
         negs = conn.execute(
-            "SELECT n.statut, n.stock_j, h.px_revient FROM negatifs_journaliers n "
+            "SELECT n.statut, n.stock_j, n.stock_j1, h.px_revient FROM negatifs_journaliers n "
             "LEFT JOIN article_history h ON h.import_id = n.import_id AND h.code = n.code "
             "WHERE n.import_id = ?",
             (import_id,),
@@ -250,11 +250,11 @@ def story_stats(jour: str, rayon: str = config.RAYON):
         prmp_passe_negatif = 0.0
         prmp_corrige = 0.0
         for n in negs:
-            valeur = abs((n["stock_j"] or 0) * (n["px_revient"] or 0))
             if n["statut"] == "corrige":
-                prmp_corrige += valeur
+                # Manque récupéré : le déficit de la veille (stock_j1 < 0) valorisé au PRMP.
+                prmp_corrige += max(0, -(n["stock_j1"] or 0)) * (n["px_revient"] or 0)
             elif n["statut"] == "nouveau":
-                prmp_passe_negatif += valeur
+                prmp_passe_negatif += abs((n["stock_j"] or 0) * (n["px_revient"] or 0))
 
         stock = conn.execute(
             "SELECT stock, couv FROM article_history WHERE import_id = ?",
