@@ -1,5 +1,4 @@
-// Simulation — détail article (17/08, rayon Frais surgelé)
-// Historique 7 jours + compensateurs proposés par l'IA.
+// Détail article — enrichi par les données réelles du backend (story) quand disponibles.
 
 export interface CompensateurDetail {
   code: number;
@@ -15,13 +14,17 @@ export interface CompensateurDetail {
 export interface ArticleDetail {
   code: number;
   libelle: string;
+  fournisseur?: string | null;
   statut: "nouveau" | "persistant" | "corrige";
   priorite: "critique" | "important" | "surveiller" | "corrige";
   stock_j1: number | null;
   stock_j: number;
   px_revient: number;
   px_vente: number;
+  pv_promo?: number | null;
   couv: number | null;
+  marge_pct?: number | null;
+  valeur_stock_prmp?: number | null;
   jours_consecutifs: number;
   premiere_apparition: string;
   hist7: { jour: string; stock: number }[];
@@ -275,5 +278,47 @@ export function getArticleDetail(code: number): ArticleDetail {
     premiere_apparition: "14/08",
     hist7: hist([...base, stock]),
     compensateurs: [],
+  };
+}
+
+// Détail réel construit depuis une anomalie enrichie (story.anomalies).
+export function articleDetailFromAnomalie(
+  a: {
+    code: number | null;
+    libelle: string | null;
+    fournisseur: string | null;
+    stock: number | null;
+    px_revient: number | null;
+    px_vente: number | null;
+    pv_promo: number | null;
+    couv: number | null;
+    marge_pct: number | null;
+    valeur_stock_prmp: number | null;
+    hist7: { jour: string; stock: number | null }[];
+    description: string | null;
+  },
+  compensateurs: CompensateurDetail[],
+): ArticleDetail {
+  const hist7 = (a.hist7 ?? []).map((h) => ({ jour: h.jour.slice(5), stock: h.stock ?? 0 }));
+  const stockJ = a.stock ?? 0;
+  const stockJ1 = hist7.length > 1 ? hist7[hist7.length - 2].stock : null;
+  return {
+    code: a.code ?? 0,
+    libelle: a.libelle ?? `#${a.code}`,
+    fournisseur: a.fournisseur,
+    statut: "persistant",
+    priorite: "important",
+    stock_j1: stockJ1,
+    stock_j: stockJ,
+    px_revient: a.px_revient ?? 0,
+    px_vente: a.px_vente ?? 0,
+    pv_promo: a.pv_promo,
+    couv: a.couv,
+    marge_pct: a.marge_pct,
+    valeur_stock_prmp: a.valeur_stock_prmp,
+    jours_consecutifs: 0,
+    premiere_apparition: hist7[0]?.jour ?? "—",
+    hist7,
+    compensateurs,
   };
 }

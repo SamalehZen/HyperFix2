@@ -103,7 +103,7 @@ def build_story_data(conn, rayon, jour):
     prev_id = _prev_import_id(conn, import_id, rayon)
 
     nb_negatifs = [dict(r) for r in conn.execute(
-        f"SELECT n.*, h.libelle, h.px_revient, h.px_vente, h.couv "
+        f"SELECT n.*, h.libelle, h.fournisseur, h.px_revient, h.px_vente, h.couv "
         f"FROM negatifs_journaliers n "
         f"LEFT JOIN article_history h ON h.import_id = n.import_id AND h.code = n.code "
         f"WHERE n.import_id = ? ORDER BY {PRIO_ORDER}, n.code",
@@ -119,13 +119,20 @@ def build_story_data(conn, rayon, jour):
         comp_map.setdefault(c["code_negatif"], []).append(c)
 
     anomalies = [dict(r) for r in conn.execute(
-        "SELECT code, type, description, valeur_j1, valeur_j FROM anomalies "
-        "WHERE import_id = ? ORDER BY id",
+        "SELECT a.code, a.type, a.description, a.valeur_j1, a.valeur_j, "
+        "h.libelle, h.fournisseur, h.ean, h.px_revient, h.px_vente, h.pv_promo, "
+        "h.stock, h.couv, h.marge_pct, h.valeur_stock_prmp "
+        "FROM anomalies a "
+        "LEFT JOIN article_history h ON h.import_id = a.import_id AND h.code = a.code "
+        "WHERE a.import_id = ? ORDER BY a.id",
         (import_id,),
     ).fetchall()]
 
     actifs = [n for n in nb_negatifs if n["statut"] != "corrige"]
-    hist = _hist_7j(conn, rayon, jour, [n["code"] for n in nb_negatifs])
+    hist_codes = [n["code"] for n in nb_negatifs] + [a["code"] for a in anomalies if a["code"]]
+    hist = _hist_7j(conn, rayon, jour, hist_codes)
+    for a in anomalies:
+        a["hist7"] = hist.get(a["code"], [])
 
     negatifs = []
     for n in actifs:
@@ -133,6 +140,7 @@ def build_story_data(conn, rayon, jour):
         negatifs.append({
             "code": n["code"],
             "libelle": n.get("libelle"),
+            "fournisseur": n.get("fournisseur"),
             "stock_j1": n["stock_j1"],
             "stock_j": n["stock_j"],
             "variation": n["variation"],
@@ -161,7 +169,7 @@ def build_story_data(conn, rayon, jour):
         })
 
     corriges = [{
-        "code": n["code"], "libelle": n.get("libelle"),
+        "code": n["code"], "libelle": n.get("libelle"), "fournisseur": n.get("fournisseur"),
         "stock_j1": n["stock_j1"], "stock_j": n["stock_j"],
         "variation": n["variation"], "statut": "corrige", "priorite": "corrige",
         "px_revient": n["px_revient"], "px_vente": n["px_vente"], "couv": n["couv"],

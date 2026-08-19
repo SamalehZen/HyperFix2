@@ -75,6 +75,19 @@ function DrawerBody({ detail }: { detail: ArticleDetail }) {
         <Kpi label="Px vente" value={fmtFdj(detail.px_vente)} />
         <Kpi label="Couverture" value={detail.couv === null ? "—" : `${detail.couv} j`} />
         <Kpi label="1re apparition" value={detail.premiere_apparition} />
+        {detail.pv_promo !== undefined && (
+          <Kpi label="PV promo" value={detail.pv_promo === null ? "—" : fmtFdj(detail.pv_promo)} />
+        )}
+        {detail.marge_pct !== undefined && (
+          <Kpi
+            label="Marge"
+            value={detail.marge_pct === null ? "—" : `${Math.round(detail.marge_pct * 10) / 10}%`}
+            tone={detail.marge_pct !== null && detail.marge_pct < 0 ? "negative" : undefined}
+          />
+        )}
+        {detail.valeur_stock_prmp !== undefined && (
+          <Kpi label="Valeur PRMP" value={detail.valeur_stock_prmp === null ? "—" : fmtFdj(detail.valeur_stock_prmp)} />
+        )}
       </div>
 
       <div className="flex flex-col gap-2">
@@ -164,6 +177,11 @@ export function ArticleDrawer({
           {resolved ? (
             <SheetDescription className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-xs">#{resolved.code}</span>
+              {resolved.fournisseur ? (
+                <span className="rounded-full border bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground">
+                  {resolved.fournisseur}
+                </span>
+              ) : null}
               <Badge variant="outline">{statutLabels[resolved.statut]}</Badge>
               <Badge variant="outline" className={prioriteBadgeClass[resolved.priorite] ?? ""}>
                 {resolved.priorite === "critique" && <TrendingDown className="size-3" />}

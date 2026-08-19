@@ -46,6 +46,7 @@ export interface GammeCompensateur {
 export interface GammeNegatif {
   code: number;
   libelle: string | null;
+  fournisseur: string | null;
   stock_j1: number | null;
   stock_j: number;
   variation: number | null;
@@ -80,6 +81,25 @@ export interface GammeSerieJour {
   critiques: number;
 }
 
+export interface GammeAnomalie {
+  code: number | null;
+  type: string;
+  description: string | null;
+  valeur_j1: number | null;
+  valeur_j: number | null;
+  libelle: string | null;
+  fournisseur: string | null;
+  ean: string | null;
+  px_revient: number | null;
+  px_vente: number | null;
+  pv_promo: number | null;
+  stock: number | null;
+  couv: number | null;
+  marge_pct: number | null;
+  valeur_stock_prmp: number | null;
+  hist7: { jour: string; stock: number | null }[];
+}
+
 export interface GammeSerieAnomalies {
   types: string[];
   jours: Array<Record<string, string | number>>;
@@ -90,7 +110,7 @@ export interface GammeStory {
   resume: GammeResume;
   top_neg: GammeTopNeg[];
   types_anom: Record<string, number>;
-  anomalies: { code: number | null; type: string; description: string | null }[];
+  anomalies: GammeAnomalie[];
   serie_jours: GammeSerieJour[];
   serie_anomalies: GammeSerieAnomalies;
   negatifs: GammeNegatif[];
@@ -142,6 +162,7 @@ export async function fetchStats(jour: string, rayon: string): Promise<GammeStat
 export interface DashboardArticleDetail {
   code: number;
   libelle: string;
+  fournisseur: string | null;
   statut: "nouveau" | "persistant" | "corrige";
   priorite: "critique" | "important" | "surveiller" | "corrige";
   stock_j1: number | null;
@@ -167,6 +188,7 @@ export interface DashboardArticleDetail {
 export interface DashboardNegatifRow {
   code: number;
   libelle: string;
+  fournisseur?: string | null;
   statut: "nouveau" | "persistant" | "corrige";
   priorite: "critique" | "important" | "surveiller" | "corrige";
   stockJ1: number | null;
@@ -185,6 +207,7 @@ export function toDashboardRows(story: GammeStory): DashboardNegatifRow[] {
   const mapNeg = (n: GammeNegatif): DashboardNegatifRow => ({
     code: n.code,
     libelle: n.libelle ?? `#${n.code}`,
+    fournisseur: n.fournisseur ?? null,
     statut: n.statut === "corrige" ? "corrige" : n.statut.startsWith("persistant") ? "persistant" : "nouveau",
     priorite: (["critique", "important", "surveiller", "corrige"].includes(n.priorite)
       ? n.priorite
@@ -214,6 +237,7 @@ export function toArticleDetail(n: GammeNegatif): DashboardArticleDetail {
   return {
     code: n.code,
     libelle: n.libelle ?? `#${n.code}`,
+    fournisseur: n.fournisseur ?? null,
     statut,
     priorite,
     stock_j1: n.stock_j1,

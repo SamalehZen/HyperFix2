@@ -415,6 +415,7 @@ export function NegatifsTableMix2({
               <TableRow>
                 <TableHead>Libellé</TableHead>
                 <TableHead>Code</TableHead>
+                <TableHead>Fournisseur</TableHead>
                 <TableHead>Statut</TableHead>
                 <TableHead>Priorité</TableHead>
                 <TableHead className="text-right">J-1</TableHead>
@@ -441,6 +442,12 @@ export function NegatifsTableMix2({
                       {row.libelle}
                     </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">#{row.code}</TableCell>
+                    <TableCell
+                      className="max-w-40 truncate text-xs text-muted-foreground"
+                      title={row.fournisseur ?? undefined}
+                    >
+                      {row.fournisseur ?? "—"}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline">{statutLabels[row.statut]}</Badge>
                     </TableCell>
@@ -501,7 +508,7 @@ export function NegatifsTableMix2({
                 ))
               ) : (
                 <TableRow>
-                  <TableCell className="h-24 text-center" colSpan={14}>
+                  <TableCell className="h-24 text-center" colSpan={15}>
                     Aucun article dans cette catégorie.
                   </TableCell>
                 </TableRow>

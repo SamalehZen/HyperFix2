@@ -3,8 +3,8 @@ import { ArrowUpRight, TrendingDown, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 
-import type { GammeResume, GammeStats } from "../_lib/gamme";
-import { AnomaliesPanel, type AnomalieRow } from "./anomalies-panel";
+import type { GammeAnomalie, GammeNegatif, GammeResume, GammeStats } from "../_lib/gamme";
+import { AnomaliesPanel } from "./anomalies-panel";
 
 function fmtFdj(v: number): string {
   return `${v.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} FDJ`;
@@ -47,12 +47,14 @@ export function Kpi4Gamme({
   resume,
   anomalies,
   prevAnomalies,
+  negatifs,
 }: {
   stats: GammeStats | null;
   prevStats: GammeStats | null;
   resume: GammeResume | null;
-  anomalies: AnomalieRow[] | null;
+  anomalies: GammeAnomalie[] | null;
   prevAnomalies: number | null;
+  negatifs: GammeNegatif[] | null;
 }) {
   const prmpPasse = stats?.prmp_passe_negatif ?? null;
   const prmpCorrige = stats?.prmp_corrige ?? null;
@@ -134,7 +136,7 @@ export function Kpi4Gamme({
           </CardContent>
         </Card>
 
-        <AnomaliesPanel anomalies={anomalies} count={resume?.anomalies ?? null}>
+        <AnomaliesPanel anomalies={anomalies} count={resume?.anomalies ?? null} negatifs={negatifs}>
           <button
             type="button"
             className="flex h-full w-full rounded-xl text-left outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
