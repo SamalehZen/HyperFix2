@@ -115,11 +115,11 @@ const chartConfig = {
                         <tspan
                           className="fill-foreground font-medium text-2xl tabular-nums"
                           x={viewBox.cx}
-                          y={(viewBox.cy || 0) + 30}
+                          y={(viewBox.cy || 0) + 36}
                         >
                           {availablePercent}%
                         </tspan>
-                        <tspan className="fill-muted-foreground text-xs" x={viewBox.cx} y={(viewBox.cy || 0) + 46}>
+                        <tspan className="fill-muted-foreground text-xs" x={viewBox.cx} y={(viewBox.cy || 0) + 52}>
                           Disponible
                         </tspan>
                       </text>
