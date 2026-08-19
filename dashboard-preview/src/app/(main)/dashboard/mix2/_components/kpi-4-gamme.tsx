@@ -46,11 +46,13 @@ export function Kpi4Gamme({
   prevStats,
   resume,
   anomalies,
+  prevAnomalies,
 }: {
   stats: GammeStats | null;
   prevStats: GammeStats | null;
   resume: GammeResume | null;
   anomalies: AnomalieRow[] | null;
+  prevAnomalies: number | null;
 }) {
   const prmpPasse = stats?.prmp_passe_negatif ?? null;
   const prmpCorrige = stats?.prmp_corrige ?? null;
@@ -110,7 +112,6 @@ export function Kpi4Gamme({
               </span>{" "}
               <span className="text-muted-foreground">le jour précédent</span>
             </p>
-            <p className="text-xs text-muted-foreground">Manque des articles corrigés (|stock J-1| × PRMP)</p>
           </CardContent>
         </Card>
 
@@ -133,7 +134,36 @@ export function Kpi4Gamme({
           </CardContent>
         </Card>
 
-        <AnomaliesPanel anomalies={anomalies} count={resume?.anomalies ?? null} />
+        <AnomaliesPanel anomalies={anomalies} count={resume?.anomalies ?? null}>
+          <button
+            type="button"
+            className="flex h-full w-full rounded-xl text-left outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Voir le détail des anomalies"
+          >
+            <Card className="h-full w-full">
+              <CardHeader>
+                <CardDescription>Anomalies</CardDescription>
+                <CardAction>
+                  <ArrowUpRight className="size-4" />
+                </CardAction>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl leading-none tracking-tight">
+                    {(resume?.anomalies ?? anomalies?.length ?? 0).toLocaleString("fr-FR")}
+                  </span>
+                  <DeltaBadge delta={pctDelta(resume?.anomalies ?? 0, prevAnomalies)} invert />
+                </div>
+                <p className="text-sm">
+                  <span className="font-medium text-foreground">
+                    {prevAnomalies?.toLocaleString("fr-FR") ?? "—"}
+                  </span>{" "}
+                  <span className="text-muted-foreground">le jour précédent · cliquer pour le détail</span>
+                </p>
+              </CardContent>
+            </Card>
+          </button>
+        </AnomaliesPanel>
       </div>
     </section>
   );

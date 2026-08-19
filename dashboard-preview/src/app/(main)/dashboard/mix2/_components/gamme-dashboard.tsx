@@ -205,6 +205,7 @@ export function GammeDashboard() {
           prevStats={prev?.stats ?? null}
           resume={story?.resume ?? null}
           anomalies={story?.anomalies ?? null}
+          prevAnomalies={prev?.story?.resume.anomalies ?? null}
         />
       </div>
 
