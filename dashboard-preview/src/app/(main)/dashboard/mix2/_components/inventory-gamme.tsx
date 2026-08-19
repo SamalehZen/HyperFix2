@@ -110,17 +110,16 @@ const chartConfig = {
               <Label
                 content={({ viewBox }) => {
                   if (viewBox && "cx" in viewBox && "cy" in viewBox) {
-                    const cy = (viewBox.cy || 0) - 34;
                     return (
                       <text textAnchor="middle" x={viewBox.cx} y={viewBox.cy}>
                         <tspan
                           className="fill-foreground font-medium text-2xl tabular-nums"
                           x={viewBox.cx}
-                          y={cy - 8}
+                          y={(viewBox.cy || 0) + 22}
                         >
                           {availablePercent}%
                         </tspan>
-                        <tspan className="fill-muted-foreground text-xs" x={viewBox.cx} y={cy + 8}>
+                        <tspan className="fill-muted-foreground text-xs" x={viewBox.cx} y={(viewBox.cy || 0) + 38}>
                           Disponible
                         </tspan>
                       </text>
