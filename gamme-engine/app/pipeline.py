@@ -370,8 +370,7 @@ def detect_anomalies(conn, import_id, rayon, jour, compared):
     anomalies = []
     for c in compared:
         stock_j, stock_j1, variation = c["stock_j"], c["stock_j1"], c["variation"]
-        neg = stock_j is not None and stock_j < 0
-        if not neg and variation is not None:
+        if variation is not None:
             if variation <= -config.CHUTE_SEUIL:
                 desc = f"Chute forte du stock ({stock_j1} → {stock_j})"
                 anomalies.append((c["code"], "chute_forte", desc, stock_j1, stock_j))

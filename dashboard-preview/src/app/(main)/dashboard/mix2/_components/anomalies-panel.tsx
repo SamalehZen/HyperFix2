@@ -23,7 +23,7 @@ import type { GammeAnomalie, GammeNegatif } from "../_lib/gamme";
 import { articleDetailFromAnomalie, type CompensateurDetail, type ArticleDetail } from "./article-details";
 import { ArticleDrawer } from "./article-drawer";
 
-const TYPE_LABELS: Record<string, string> = {
+export const TYPE_LABELS: Record<string, string> = {
   hausse_forte: "Hausses fortes",
   chute_forte: "Chutes fortes",
   promo_active: "Promos actives",

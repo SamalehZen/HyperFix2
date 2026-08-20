@@ -230,7 +230,7 @@ export function GammeDashboard() {
         </div>
 
         <div className="h-full xl:col-span-4">
-          <NegatifsLive story={story} />
+          <NegatifsLive story={story} jour={jour} />
         </div>
         <div className="h-full xl:col-span-8">
           <Tendance90Jours serie={story?.serie_jours ?? null} />
