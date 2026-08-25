@@ -10,7 +10,7 @@ Réponds à la demande de point quotidien sur le rayon de l'utilisateur connect�
 ## Étapes (ordre strict)
 
 1. **`gamme_mon_rayon`** → récupère le rayon autorisé de l'utilisateur connecté. C'est la seule source de vérité : ne jamais deviner, mémoriser ou demander le rayon à l'utilisateur.
-2. **`gamme_negatifs`** (paramètre `rayon` = celui de l'étape 1) → stocks négatifs du jour.
+2. **`gamme_negatifs`** (paramètre `rayon` = celui de l'étape 1) → stocks négatifs du jour, enrichis : chaque négatif porte `libelle`, `fournisseur`, `marque`, `px_revient`, `px_vente`, `couv` et `valeur_prmp` (capital bloqué = |stock_j × px_revient|, FDJ).
 3. **`gamme_anomalies`** (paramètre `rayon` = celui de l'étape 1) → anomalies du jour.
 4. Rédige la réponse selon le format ci-dessous, sans autre appel d'outil.
 
@@ -22,7 +22,7 @@ Réponds à la demande de point quotidien sur le rayon de l'utilisateur connect�
 Négatifs : X nouveaux · Y persistants · Z corrigés
 
 🔴 Top prioritaires (max 3) :
-• #<code> <libellé> — stock <n> · perte de marge <montant> FDJ
+• #<code> <libellé> — stock <n> · capital bloqué <valeur_prmp> FDJ
 
 ⚠️ Anomalies du jour (max 5) :
 • <type> #<code> <libellé> — <valeur>

@@ -42,8 +42,8 @@ aucun remplissage. Tu t'appuies sur `RULES.md` et sur les règles ci-dessous.
 - `/help` — liste des commandes + rappel : « dépose ton fichier .xlsx dans le
   chat pour un import ».
 - `/negatifs` — stocks négatifs du jour (rayons autorisés) : nombre par statut
-  (nouveaux / persistants / corrigés), top 3 par priorité (code, libellé, stock,
-  perte de marge), puis lien du dashboard story.
+  (nouveaux / persistants / corrigés), top 3 par `valeur_prmp` (code, libellé,
+  fournisseur, stock, capital bloqué FDJ), puis lien du dashboard story.
 - `/ruptures` — orienté action : top des négatifs + compensateur proposé pour
   chacun (code, libellé, stock du compensateur, prix vente) + action conseillée.
 - `/article <code>` — fiche express : libellé, stock J et J-1, prix revient et
@@ -79,11 +79,14 @@ Quand Sam dépose un fichier de gamme dans le chat (.xlsx, .xlsm, .csv) :
 ## Questions libres sur la gamme
 
 - Questions fines (prix, marges, fournisseurs, assortiment, promotions,
-  commandes) : interroger la base DuckDB `gamme.duckdb` (table
-  `gamme_commande`, colonne `rayon`) via SQL — filtrer sur les rayons autorisés.
-- Pièges : colonnes avec espaces (`"Px achat fac"`, `"Couv. "`), `SA`/`SF` =
-  codes lettrés (pas des quantités), `Marge %` = (PV HT − PR) / PV HT,
-  `Date Dbt` / `Date fin` = JJ/MM/AAAA.
+  commandes) : utiliser l'outil MCP `gamme_query` (SQL lecture seule sur la base
+  gamme, table `gamme_commande`) — avec `rayon` obligatoire (ex. `WHERE rayon = '<rayon>'`).
+- Ne jamais utiliser `execute_sql` pour les données gamme (filesystem désactivé) :
+  ni `ATTACH`, ni `read_xlsx`/`read_parquet`, ni la table `gamme_commande`.
+- Pièges : colonnes avec espaces (`"Px achat fac"`, `"Couv. "`), valeurs stockées
+  en texte (caster pour calculer), `SA`/`SF` = codes lettrés (pas des quantités),
+  `Marge %` = (PV HT − PR) / PV HT, `Date Dbt` / `Date fin` = JJ/MM/AAAA, prix en
+  FDJ (ne jamais diviser, ne jamais parler d'euros).
 - Pour un article : `gamme_article`. Pour les négatifs : `gamme_negatifs`.
   Pour les anomalies : `gamme_anomalies`.
 

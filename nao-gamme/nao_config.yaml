@@ -30,9 +30,12 @@ llm:
     api_key: "{{ env('OPENCODE_ZEN_API_KEY') }}"
     base_url: "{{ env('OPENCODE_ZEN_BASE_URL') }}"
     models:
-    - id: hy3-free
-      name: Hy3 Free (par défaut)
+    - id: x-preview-f-free
+      name: Ox Alpha Free (par défaut)
       default: true
+    - id: hy3-free
+      name: Hy3 Free (repli)
+      default: false
     - id: deepseek-v4-flash
       name: DeepSeek V4 Flash (défaut dès paiement ajouté)
       default: false

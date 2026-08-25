@@ -6,6 +6,7 @@ API_KEY = os.getenv("OPENCODE_API_KEY", "")
 MODEL = os.getenv("GAMME_LLM_MODEL", "deepseek-v4-flash-free")
 DATA_DIR = os.getenv("GAMME_DATA_DIR", "/storage/gamme")
 NAO_PROJECT_DIR = os.getenv("NAO_PROJECT_DIR", "/root/nao-gamme")
+NAO_DB_PATH = os.path.join(NAO_PROJECT_DIR, "gamme.duckdb")
 RAYON = os.getenv("GAMME_RAYON", "epicerie-salee")
 
 DEPOT_DIR = os.path.join(DATA_DIR, "depot")

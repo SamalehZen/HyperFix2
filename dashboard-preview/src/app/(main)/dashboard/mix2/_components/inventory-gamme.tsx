@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, PackageCheck, PackageX, TrendingDown, TriangleAlert } from "lucide-react";
+import { Archive, ArrowUpRight, PackageCheck, PackageX, TrendingDown, TriangleAlert } from "lucide-react";
 import { Label, Pie, PieChart } from "recharts";
 
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +19,7 @@ export function InventoryGamme({ stats }: { stats: GammeStats | null }) {
       ? Math.max(0, stats.nb_articles - stats.en_stock - (stats.negatifs ?? 0))
       : chartData[0]["out-of-stock"];
   const negatifs = stats?.negatifs ?? 0;
+  const dormants = stats?.dormants ?? 42;
 
   const totalUnits = inStock + lowStock + outOfStock;
   const availablePercent = totalUnits > 0 ? Math.round((inStock / totalUnits) * 100) : 0;
@@ -67,6 +68,11 @@ export function InventoryGamme({ stats }: { stats: GammeStats | null }) {
       icon: TrendingDown,
       label: "Négatifs",
       value: negatifs,
+    },
+    {
+      icon: Archive,
+      label: "Dormants",
+      value: dormants,
     },
   ] as const;
 
@@ -138,7 +144,7 @@ const chartConfig = {
         </ChartContainer>
         <Separator />
 
-        <div className="grid grid-cols-4 divide-x">
+        <div className="grid grid-cols-5 divide-x">
           {inventorySummary.map((item, _index) => (
             <div key={item.label} className="flex flex-col items-center gap-3 text-center">
               <div className="grid size-9 place-items-center rounded-full bg-muted">

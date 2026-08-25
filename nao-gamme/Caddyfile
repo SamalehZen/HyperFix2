@@ -1,3 +1,9 @@
+# OpenMausBot — personal cloud behind Cloudflare proxy (migré depuis le caddy système)
+popo.hypeer.cloud {
+	encode gzip
+	reverse_proxy host.docker.internal:8800
+}
+
 # Gamme Épicerie Salée — nao agent en production
 lololo.hypeer.cloud {
 	encode zstd gzip
@@ -34,4 +40,9 @@ lololo.hypeer.cloud {
 	handle {
 		reverse_proxy nao:5005
 	}
+}
+# OpenBot — momo.hypeer.cloud
+momo.hypeer.cloud {
+	encode gzip
+	reverse_proxy openbot-prod-openbot-1:3001
 }

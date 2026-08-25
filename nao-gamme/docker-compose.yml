@@ -78,6 +78,8 @@ services:
             - ./docs/images:/images:ro
             - caddy_config:/config
             - caddy_data:/data
+        extra_hosts:
+            - 'host.docker.internal:host-gateway'
         depends_on:
             - nao
         restart: unless-stopped

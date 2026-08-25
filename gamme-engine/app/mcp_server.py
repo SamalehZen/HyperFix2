@@ -1,5 +1,7 @@
 import json
+import re
 import os
+import threading
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.server import AuthSettings, TransportSecuritySettings
@@ -10,6 +12,7 @@ from . import config
 from . import db
 from . import labels
 from . import pipeline
+from . import query
 
 mcp = FastMCP(
     "gamme-engine",
@@ -125,27 +128,115 @@ def gamme_rayons() -> str:
     )
 
 
+# Verrous d'import par rayon : un seul pipeline à la fois, jamais de double
+# traitement quand l'agent retente pendant qu'un import tourne.
+_import_locks = {}
+_import_locks_guard = threading.Lock()
+
+
+def _import_lock(rayon: str) -> threading.Lock:
+    with _import_locks_guard:
+        if rayon not in _import_locks:
+            _import_locks[rayon] = threading.Lock()
+        return _import_locks[rayon]
+
+
+def _import_en_cours(rayon: str) -> bool:
+    return _import_lock(rayon).locked()
+
+
 @mcp.tool()
 def gamme_import_file(path: str, rayon: str) -> str:
     """Importe un fichier de gamme (.xlsx, .xlsm, .csv). path = chemin du fichier
     (si l'utilisateur l'a déposé dans le chat, le chemin commence par /home/uploads/
-    ou /app/storage/). rayon = identifiant du rayon (ex: epicerie-salee). Les données
-    sont enregistrées et le rapport est consultable dans le dashboard story mode."""
+    ou /app/storage/). rayon = identifiant du rayon (ex: frais-surgele).
+    FONCTIONNEMENT ASYNCHRONE : l'import complet (comparaison J/J-1, compensateurs
+    LLM) prend 2 à 5 minutes. L'outil répond donc immédiatement :
+    - {"statut": "demarre"} → l'import tourne en arrière-plan. NE JAMAIS rappeler
+      l'outil pour le même fichier (dédoublonnage par hash). Attendre ~60 s puis
+      vérifier avec gamme_imports (statut ok/erreur) et gamme_rapports (résumé),
+      puis présenter le récap + lien story.
+    - {"statut": "deja_importe"} → fichier déjà traité, le résumé est renvoyé
+      directement.
+    - {"statut": "refuse"} → fichier invalide, raison dans "erreur".
+    - {"statut": "occupe"} → un autre import est en cours pour ce rayon ; attendre
+      puis vérifier avec gamme_imports."""
     _guard_rayon(rayon)
     if rayon not in config.rayon_ids():
-        return f"Rayon inconnu : {rayon}. Rayons disponibles : {', '.join(config.rayon_ids())}"
+        return json.dumps(
+            {"statut": "refuse", "erreur": f"Rayon inconnu : {rayon}. Rayons disponibles : {', '.join(config.rayon_ids())}"},
+            ensure_ascii=False,
+        )
     local = config.map_nao_storage_path(path)
     if not os.path.exists(local):
-        return f"Fichier introuvable : {path}"
-    res = pipeline.run_import(local, rayon=rayon)
-    out = _resume_to_markdown(res)
-    if res.get("ok"):
-        jour = res["resume"].get("jour")
-        out += (
-            f"\n\n🎬 **Story mode (dashboard interactif)** : `/story/?jour={jour}&rayon={rayon}`"
-            f" — URL publique : `https://<domaine>/story/?jour={jour}&rayon={rayon}`"
+        return json.dumps(
+            {"statut": "refuse", "erreur": f"Fichier introuvable : {path}"},
+            ensure_ascii=False,
         )
-    return out
+
+    # Dédoublonnage rapide par hash : un fichier déjà traité renvoie son résumé
+    # immédiatement, sans relancer le pipeline.
+    h = db.sha256_file(local)
+    with db.lock_conn() as conn:
+        info = db.import_statut_for_hash(conn, h, rayon)
+        if info is not None:
+            import_id, statut, has_rapport = info
+            if statut == "erreur":
+                msg_row = conn.execute(
+                    "SELECT message FROM imports WHERE id = ?", (import_id,)
+                ).fetchone()
+                return json.dumps(
+                    {"statut": "refuse", "erreur": f"Fichier déjà refusé lors d'un passage précédent : {msg_row['message'] or 'raison inconnue'}"},
+                    ensure_ascii=False,
+                )
+            if statut in ("ok", "baseline") and has_rapport:
+                rap = conn.execute(
+                    "SELECT jour, resume_json FROM rapports WHERE import_id = ?", (import_id,)
+                ).fetchone()
+                resume = json.loads(rap["resume_json"]) if rap else {}
+                out = _resume_to_markdown({"ok": True, "resume": resume, "rayon": rayon})
+                jour = resume.get("jour")
+                if jour:
+                    out += (
+                        f"\n\n🎬 **Story mode (dashboard interactif)** : `/story/?jour={jour}&rayon={rayon}`"
+                        f" — URL publique : `https://<domaine>/story/?jour={jour}&rayon={rayon}`"
+                    )
+                out = f"(Fichier déjà importé — résumé enregistré.)\n\n{out}"
+                return json.dumps(
+                    {"statut": "deja_importe", "jour": resume.get("jour"), "resume_markdown": out},
+                    ensure_ascii=False,
+                )
+
+    if _import_en_cours(rayon):
+        return json.dumps(
+            {"statut": "occupe", "message": "Un import est déjà en cours pour ce rayon. Attends ~60 s puis vérifie avec gamme_imports."},
+            ensure_ascii=False,
+        )
+
+    def _run():
+        with _import_lock(rayon):
+            try:
+                pipeline.run_import(local, rayon=rayon)
+            except Exception as e:  # le statut 'erreur' est posé par le pipeline
+                try:
+                    with db.lock_conn() as conn:
+                        db.create_import(
+                            conn, rayon, pipeline.jour_today(), os.path.basename(local),
+                            db.sha256_file(local), "erreur", message=str(e),
+                        )
+                except Exception:
+                    pass
+
+    threading.Thread(target=_run, daemon=True).start()
+    return json.dumps(
+        {
+            "statut": "demarre",
+            "message": "Import lancé en arrière-plan (2 à 5 minutes : comparaison J/J-1 + compensateurs). "
+            "NE PAS rappeler cet outil pour le même fichier. Dans ~60 s : gamme_imports pour le statut, "
+            "puis gamme_rapports pour le résumé, et présente le récap + lien story mode.",
+        },
+        ensure_ascii=False,
+    )
 
 
 @mcp.tool()
@@ -216,8 +307,12 @@ def gamme_rapports(rayon: str, limit: int = 5) -> str:
 
 @mcp.tool()
 def gamme_negatifs(rayon: str, statut: str = "") -> str:
-    """Stocks négatifs du dernier import d'un rayon. statut optionnel :
-    nouveau | persistant | persistant_aggrave | persistant_stable | persistant_ameliore."""
+    """Stocks négatifs du dernier import d'un rayon, enrichis : chaque négatif
+    porte son libelle, fournisseur, marque, px_revient, px_vente et valeur_prmp
+    (capital bloqué = |stock_j × px_revient|, FDJ). statut optionnel :
+    nouveau | persistant_aggrave | persistant_stable | persistant_ameliore
+    (les corrigés ne sont jamais renvoyés). Le total du jour = TOUS les
+    négatifs renvoyés (nouveaux + persistants), jamais les seuls nouveaux."""
     _guard_rayon(rayon)
     with db.lock_conn() as conn:
         row = conn.execute(
@@ -230,12 +325,17 @@ def gamme_negatifs(rayon: str, statut: str = "") -> str:
                 "et je l'importerai automatiquement."
             )
         import_id = row["id"]
-        q = "SELECT * FROM negatifs_journaliers WHERE import_id = ? AND statut != 'corrige'"
+        q = (
+            "SELECT n.*, h.libelle, h.fournisseur, h.marque, h.px_revient, h.px_vente, h.couv "
+            "FROM negatifs_journaliers n "
+            "LEFT JOIN article_history h ON h.import_id = n.import_id AND h.code = n.code "
+            "WHERE n.import_id = ? AND n.statut != 'corrige'"
+        )
         args = [import_id]
         if statut:
-            q += " AND statut = ?"
+            q += " AND n.statut = ?"
             args.append(statut)
-        q += " ORDER BY priorite DESC, code"
+        q += " ORDER BY n.priorite DESC, n.code"
         negs = [dict(r) for r in conn.execute(q, args).fetchall()]
         comps = [dict(r) for r in conn.execute(
             "SELECT * FROM compensations WHERE import_id = ? ORDER BY code_negatif, rang", (import_id,)).fetchall()]
@@ -245,11 +345,17 @@ def gamme_negatifs(rayon: str, statut: str = "") -> str:
     out = []
     for n in negs:
         cs = comp_map.get(n["code"], [])
+        px_rev = n.get("px_revient") or 0
+        valeur_prmp = round(abs((n["stock_j"] or 0) * px_rev), 2)
         out.append({
-            "code": n["code"], "statut": n["statut"], "priorite": n["priorite"],
+            "code": n["code"], "libelle": n.get("libelle"), "fournisseur": n.get("fournisseur"),
+            "marque": n.get("marque"),
+            "statut": n["statut"], "priorite": n["priorite"],
             "stock_j1": n["stock_j1"], "stock_j": n["stock_j"], "variation": n["variation"],
             "jours_consecutifs": n["jours_consecutifs"],
             "premiere_apparition": n["premiere_apparition"],
+            "px_revient": px_rev, "px_vente": n.get("px_vente"), "couv": n.get("couv"),
+            "valeur_prmp": valeur_prmp,
             "compensateurs": [{"code": c["code_compensateur"], "libelle": c["libelle_compensateur"],
                                "confiance": c["confiance"], "justification": c["justification"],
                                "px_revient": c["px_revient_compensateur"], "couv": c["couv_compensateur"]}
@@ -383,6 +489,24 @@ def gamme_image_article(code: int, rayon: str) -> str:
 
 
 @mcp.tool()
+def gamme_query(sql: str, rayon: str) -> str:
+    """SQL en lecture seule sur la base gamme (table gamme_commande, synchronisée au
+    dernier import). Uniquement SELECT/WITH — toute opération d'écriture est refusée.
+    rayon = identifiant du rayon (obligatoire, vérifié côté serveur).
+    IMPORTANT : la table `gamme_commande` est DÉJÀ FILTRÉE sur le rayon du gestionnaire
+    — écris du SQL naturel, sans ajouter `rayon` aux colonnes SELECT ni au WHERE
+    (facultatif). Recherche par nom : "Libellé" ILIKE '%<mot>%'.
+    Pièges : les colonnes ont des espaces → guillemets doubles (« "Px achat fac" ») ;
+    les valeurs numériques sont stockées en texte → caster pour calculer
+    (CAST("Marge %" AS DOUBLE)) ; les prix sont en francs djiboutiens (FDJ) — ne jamais
+    diviser ; `SA`/`SF` sont des codes lettrés.
+    Exemple : SELECT "Code", "Libellé", "Marge %" FROM gamme_commande
+    WHERE "Marge %" <> '' ORDER BY CAST("Marge %" AS DOUBLE) DESC LIMIT 5."""
+    _guard_rayon(rayon)
+    return query.run_query(sql, rayon)
+
+
+@mcp.tool()
 def gamme_anomalies(rayon: str, limit: int = 50) -> str:
     """Anomalies du dernier import (marges négatives, chutes/hausses de stock, promos)."""
     _guard_rayon(rayon)
@@ -407,3 +531,201 @@ def streamable_app():
         return mcp.streamable_http_app()
     except AttributeError:
         return None
+
+
+@mcp.tool()
+def gamme_history_query(jour: str, rayon: str, sql: str) -> str:
+    """SQL en lecture seule sur l'HISTORIQUE quotidien de la gamme (table
+    article_history) : les données détaillées d'un jour passé. Uniquement
+    SELECT/WITH — toute écriture est refusée.
+    jour = date au format YYYY-MM-DD correspondant à un import existant ;
+    rayon = identifiant du rayon (obligatoire).
+    La table `article_history` est DÉJÀ FILTRÉE sur le jour et le rayon : écris
+    du SQL naturel, sans ajouter `jour` ni `rayon` au SELECT ni au WHERE.
+    Colonnes : code, ean, libelle, fournisseur, marque, attribut, collection,
+    stock, valeur_stock_prmp, px_vente, pv_promo, date_dbt, date_fin,
+    px_revient, marge_pct, marge_promo_pct, px_achat_fac, px_achat_tv, tva,
+    couv, quar, assort, sa, sf, nb_uc_pcb, mini_cde, maxi, incre, mode_reappr,
+    en_cours.
+    Exemples :
+      SELECT code, libelle, stock FROM article_history WHERE stock = 0 ORDER BY valeur_stock_prmp DESC
+      SELECT code, libelle, stock, valeur_stock_prmp FROM article_history ORDER BY stock DESC LIMIT 5
+      -- promos actives au 20/08/2026 (dates stockées JJ/MM/AAAA → substr pour comparer) :
+      SELECT code, libelle, pv_promo, marge_pct, marge_promo_pct FROM article_history
+        WHERE pv_promo <> '' AND substr(date_dbt,7,4)||substr(date_dbt,4,2)||substr(date_dbt,1,2) <= '20260820'
+          AND substr(date_fin,7,4)||substr(date_fin,4,2)||substr(date_fin,1,2) >= '20260820'
+    Pièges : valeurs numériques stockées en texte → CAST(x AS DOUBLE) pour calculer ;
+    prix en francs djiboutiens (FDJ) — ne jamais diviser ; SA/SF sont des codes lettrés ;
+    date_dbt/date_fin au format JJ/MM/AAAA → réordonner avec substr pour comparer (voir exemple)."""
+    _guard_rayon(rayon)
+    return query.run_history_query(sql, rayon, jour)
+
+
+@mcp.tool()
+def gamme_serie(rayon: str, jusqu_a: str = "") -> str:
+    """Série quotidienne complète du rayon : TOUTES les journées importées en un
+    seul appel. Pour toute question d'évolution (graphique, tendance, comparaison
+    de jours) — ne pas itérer sur gamme_history_query.
+    jusqu_a = date de fin optionnelle (YYYY-MM-DD, défaut : dernier import).
+    Renvoie par jour : negatifs (nb actifs), nouveaux, persistants, corriges,
+    critiques, prmp_negatif (capital bloqué par le stock négatif, FDJ),
+    prmp_corrige (déficit récupéré, FDJ), anomalies_par_type
+    ({marge_negative, promo_active, chute_forte, hausse_forte}), en_stock,
+    stock_bas (couv <= 7 j), dormants (couv = 999 & stock > 0),
+    corriges_sous_7j (% des épisodes corrigés en <= 7 jours, glissant 90 j).
+    Exemples :
+      {"jour": "2026-08-18", "negatifs": 12, "nouveaux": 3, "persistants": 9,
+       "corriges": 4, "critiques": 2, "prmp_negatif": 41445.0, "prmp_corrige": 0.0,
+       "anomalies_par_type": {"marge_negative": 5, "chute_forte": 1},
+       "en_stock": 3600, "stock_bas": 128, "dormants": 138, "corriges_sous_7j": 72}
+    Pour le détail article par article d'un jour : gamme_history_query."""
+    _guard_rayon(rayon)
+    with db.lock_conn() as conn:
+        row = conn.execute(
+            "SELECT MAX(jour) AS j FROM imports WHERE rayon = ? AND statut = 'ok'", (rayon,)
+        ).fetchone()
+        dernier = row["j"]
+        if not dernier:
+            return json.dumps(
+                {"success": False, "erreur": "Aucun import pour ce rayon. Dépose le fichier de gamme du jour dans le chat."},
+                ensure_ascii=False,
+            )
+        fin = jusqu_a if re.match(r"^\d{4}-\d{2}-\d{2}$", jusqu_a or "") else dernier
+
+        counts = conn.execute(
+            "SELECT jour, statut, COUNT(*) AS n, "
+            "SUM(CASE WHEN priorite = 'critique' THEN 1 ELSE 0 END) AS crit "
+            "FROM negatifs_journaliers WHERE rayon = ? AND jour <= ? "
+            "GROUP BY jour, statut ORDER BY jour",
+            (rayon, fin),
+        ).fetchall()
+        prmps = conn.execute(
+            "SELECT n.jour, n.statut, n.stock_j, n.stock_j1, h.px_revient "
+            "FROM negatifs_journaliers n "
+            "LEFT JOIN article_history h ON h.import_id = n.import_id AND h.code = n.code "
+            "WHERE n.rayon = ? AND n.jour <= ? ORDER BY n.jour",
+            (rayon, fin),
+        ).fetchall()
+        anomalies = conn.execute(
+            "SELECT jour, type, COUNT(*) AS n FROM anomalies "
+            "WHERE rayon = ? AND jour <= ? GROUP BY jour, type ORDER BY jour",
+            (rayon, fin),
+        ).fetchall()
+        sante = conn.execute(
+            "SELECT jour, "
+            "SUM(CASE WHEN stock > 0 THEN 1 ELSE 0 END) AS en_stock, "
+            "SUM(CASE WHEN stock > 0 AND couv IS NOT NULL AND couv <= 7 THEN 1 ELSE 0 END) AS stock_bas, "
+            "SUM(CASE WHEN stock > 0 AND couv = 999 THEN 1 ELSE 0 END) AS dormants, "
+            "SUM(CASE WHEN stock < 0 THEN 1 ELSE 0 END) AS nb_negatifs "
+            "FROM article_history WHERE rayon = ? AND jour <= ? GROUP BY jour ORDER BY jour",
+            (rayon, fin),
+        ).fetchall()
+        corrections = conn.execute(
+            "SELECT jour, jours_consecutifs FROM negatifs_journaliers "
+            "WHERE rayon = ? AND statut = 'corrige' ORDER BY jour",
+            (rayon,),
+        ).fetchall()
+
+        # corriges_sous_7j : fenêtre glissante de 90 jours (comme /stats).
+        from datetime import date, timedelta
+
+        def _corr_pct(jour: str):
+            limite = (date.fromisoformat(jour) - timedelta(days=90)).strftime("%Y-%m-%d")
+            recent = [c for c in corrections if jour >= c["jour"] >= limite]
+            if not recent:
+                return None
+            return round(
+                100 * sum(1 for c in recent if (c["jours_consecutifs"] or 0) <= 7) / len(recent)
+            )
+
+        serie = {}
+        for r in counts:
+            d = serie.setdefault(r["jour"], {
+                "jour": r["jour"], "negatifs": 0, "nouveaux": 0,
+                "persistants": 0, "corriges": 0, "critiques": 0,
+                "prmp_negatif": 0.0, "prmp_corrige": 0.0,
+                "anomalies_par_type": {}, "anomalies_total": 0,
+                "en_stock": None, "stock_bas": None, "dormants": None,
+                "corriges_sous_7j": None,
+            })
+            if r["statut"] == "corrige":
+                d["corriges"] += r["n"]
+            else:
+                d["negatifs"] += r["n"]
+                if r["statut"] == "nouveau":
+                    d["nouveaux"] += r["n"]
+                else:
+                    d["persistants"] += r["n"]
+            d["critiques"] += r["crit"] or 0
+        for r in prmps:
+            d = serie.setdefault(r["jour"], {
+                "jour": r["jour"], "negatifs": 0, "nouveaux": 0,
+                "persistants": 0, "corriges": 0, "critiques": 0,
+                "prmp_negatif": 0.0, "prmp_corrige": 0.0,
+                "anomalies_par_type": {}, "anomalies_total": 0,
+                "en_stock": None, "stock_bas": None, "dormants": None,
+                "corriges_sous_7j": None,
+            })
+            px = r["px_revient"] or 0
+            if r["statut"] == "corrige":
+                d["prmp_corrige"] += max(0, -(r["stock_j1"] or 0)) * px
+            else:
+                d["prmp_negatif"] += abs((r["stock_j"] or 0) * px)
+        for r in anomalies:
+            d = serie.setdefault(r["jour"], {
+                "jour": r["jour"], "negatifs": 0, "nouveaux": 0,
+                "persistants": 0, "corriges": 0, "critiques": 0,
+                "prmp_negatif": 0.0, "prmp_corrige": 0.0,
+                "anomalies_par_type": {}, "anomalies_total": 0,
+                "en_stock": None, "stock_bas": None, "dormants": None,
+                "corriges_sous_7j": None,
+            })
+            d["anomalies_par_type"][r["type"]] = r["n"]
+            d["anomalies_total"] += r["n"]
+        for r in sante:
+            d = serie.setdefault(r["jour"], {
+                "jour": r["jour"], "negatifs": 0, "nouveaux": 0,
+                "persistants": 0, "corriges": 0, "critiques": 0,
+                "prmp_negatif": 0.0, "prmp_corrige": 0.0,
+                "anomalies_par_type": {}, "anomalies_total": 0,
+                "en_stock": None, "stock_bas": None, "dormants": None,
+                "corriges_sous_7j": None,
+            })
+            d["en_stock"] = r["en_stock"]
+            d["stock_bas"] = r["stock_bas"]
+            d["dormants"] = r["dormants"]
+
+        out = sorted(serie.values(), key=lambda d: d["jour"])
+        for d in out:
+            d["prmp_negatif"] = round(d["prmp_negatif"], 2)
+            d["prmp_corrige"] = round(d["prmp_corrige"], 2)
+            d["corriges_sous_7j"] = _corr_pct(d["jour"])
+
+    return json.dumps(
+        {"success": True, "rayon": rayon, "nb_jours": len(out), "serie": out},
+        ensure_ascii=False,
+    )
+
+
+@mcp.tool()
+def gamme_imports(rayon: str, limit: int = 10) -> str:
+    """Historique des imports d'un rayon, du plus récent au plus ancien : jour,
+    fichier_source, statut (ok | baseline | erreur) et message d'erreur éventuel.
+    Répond à « pourquoi mon fichier d'hier a été refusé ? » : un import en
+    erreur porte la raison dans `message`. limit = nombre d'imports à renvoyer."""
+    _guard_rayon(rayon)
+    with db.lock_conn() as conn:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT id, jour, fichier_source, statut, message, date_import "
+            "FROM imports WHERE rayon = ? ORDER BY id DESC LIMIT ?",
+            (rayon, max(1, min(limit, 50))),
+        ).fetchall()]
+    if not rows:
+        return json.dumps(
+            {"success": False, "erreur": f"Aucun import pour le rayon `{rayon}`."},
+            ensure_ascii=False,
+        )
+    return json.dumps(
+        {"success": True, "rayon": rayon, "imports": rows},
+        ensure_ascii=False,
+    )

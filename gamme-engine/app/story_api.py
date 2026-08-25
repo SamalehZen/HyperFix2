@@ -77,6 +77,36 @@ def _serie_anomalies(conn, rayon, jour):
     return {"types": types, "jours": sorted(serie.values(), key=lambda d: d["jour"])}
 
 
+def _serie_prmp(conn, rayon, jour):
+    """Série quotidienne des valeurs PRMP (charts valeur).
+
+    prmp_negatif : somme |stock_j × px_revient| des négatifs actifs du jour
+                   (statut != 'corrige') — total bloqué ce jour.
+    prmp_corrige : somme max(0, −stock_j1) × px_revient des corrigés du jour
+                   (déficit de la veille récupéré) — mêmes formules que /stats.
+    """
+    rows = conn.execute(
+        "SELECT n.jour, n.statut, n.stock_j, n.stock_j1, h.px_revient "
+        "FROM negatifs_journaliers n "
+        "LEFT JOIN article_history h ON h.import_id = n.import_id AND h.code = n.code "
+        "WHERE n.rayon = ? AND n.jour <= ? ORDER BY n.jour",
+        (rayon, jour),
+    ).fetchall()
+    serie = {}
+    for r in rows:
+        d = serie.setdefault(r["jour"], {"jour": r["jour"], "prmp_negatif": 0.0, "prmp_corrige": 0.0})
+        px = r["px_revient"] or 0
+        if r["statut"] == "corrige":
+            d["prmp_corrige"] += max(0, -(r["stock_j1"] or 0)) * px
+        else:
+            d["prmp_negatif"] += abs((r["stock_j"] or 0) * px)
+    out = [
+        {**v, "prmp_negatif": round(v["prmp_negatif"], 2), "prmp_corrige": round(v["prmp_corrige"], 2)}
+        for v in serie.values()
+    ]
+    return sorted(out, key=lambda d: d["jour"])
+
+
 def _hist_7j(conn, rayon, jour, codes):
     """Historique stock 7 jours pour les articles donnés (sparklines + drawer)."""
     if not codes:
@@ -221,6 +251,7 @@ def build_story_data(conn, rayon, jour):
         "types_anom": types_anom,
         "anomalies": anomalies,
         "serie_jours": _serie_jours(conn, rayon, jour),
+        "serie_prmp": _serie_prmp(conn, rayon, jour),
         "serie_anomalies": _serie_anomalies(conn, rayon, jour),
         "negatifs": negatifs,
         "corriges": corriges,
@@ -261,7 +292,7 @@ def story_stats(jour: str, rayon: str = config.RAYON):
             if n["statut"] == "corrige":
                 # Manque récupéré : le déficit de la veille (stock_j1 < 0) valorisé au PRMP.
                 prmp_corrige += max(0, -(n["stock_j1"] or 0)) * (n["px_revient"] or 0)
-            elif n["statut"] == "nouveau":
+            elif n["statut"] != "corrige":
                 prmp_passe_negatif += abs((n["stock_j"] or 0) * (n["px_revient"] or 0))
 
         stock = conn.execute(

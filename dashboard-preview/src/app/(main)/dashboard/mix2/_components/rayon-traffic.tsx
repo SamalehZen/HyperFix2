@@ -8,7 +8,7 @@ import { Area, AreaChart, CartesianGrid, Line, XAxis, YAxis } from "recharts";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
-import type { GammeSerieAnomalies, GammeSerieJour } from "../_lib/gamme";
+import type { GammeSeriePrmp } from "../_lib/gamme";
 
 const MAX_DAYS = 15;
 
@@ -16,38 +16,26 @@ function formatJour(jour: string): string {
   return format(parseISO(jour), "dd/MM");
 }
 
+function fmtFdj(v: number): string {
+  return v.toLocaleString("fr-FR", { maximumFractionDigits: 0 });
+}
+
 const chartConfig = {
   negatifs: {
-    label: "Négatifs (nouveaux + persistants)",
+    label: "Négatifs du jour",
     color: "var(--chart-3)",
   },
-  anomalies: {
-    label: "Anomalies",
-    color: "var(--destructive)",
+  corriges: {
+    label: "Corrigés (J-1)",
+    color: "#f97316",
   },
 } satisfies ChartConfig;
 
-export function RayonTraffic({
-  serieAnomalies,
-  serieJours,
-}: {
-  serieAnomalies: GammeSerieAnomalies | null;
-  serieJours: GammeSerieJour[] | null;
-}) {
-  const anomaliesByJour = new Map<string, number>();
-  for (const d of serieAnomalies?.jours ?? []) {
-    const jour = String(d.jour);
-    let sum = 0;
-    for (const t of serieAnomalies?.types ?? []) {
-      sum += Number(d[t] ?? 0) || 0;
-    }
-    anomaliesByJour.set(jour, sum);
-  }
-
-  const chartData = (serieJours ?? []).slice(-MAX_DAYS).map((s) => ({
+export function RayonTraffic({ seriePrmp }: { seriePrmp: GammeSeriePrmp[] | null }) {
+  const chartData = (seriePrmp ?? []).slice(-MAX_DAYS).map((s) => ({
     jour: s.jour,
-    negatifs: s.total,
-    anomalies: anomaliesByJour.get(s.jour) ?? 0,
+    negatifs: s.prmp_negatif,
+    corriges: s.prmp_corrige,
   }));
 
   const lastNegatifs = chartData.at(-1)?.negatifs ?? 0;
@@ -56,7 +44,7 @@ export function RayonTraffic({
     return (
       <Card className="h-full">
         <CardHeader>
-          <CardTitle className="font-normal text-muted-foreground text-sm">Activité du rayon — par jour</CardTitle>
+          <CardTitle className="font-normal text-muted-foreground text-sm">Négatifs PRMP — corrigés vs en cours</CardTitle>
         </CardHeader>
         <CardContent className="flex h-54 items-center justify-center text-sm text-muted-foreground xl:h-64">
           Aucune donnée réelle pour cette période
@@ -68,9 +56,9 @@ export function RayonTraffic({
   return (
     <Card className="h-full">
       <CardHeader>
-        <CardTitle className="font-normal text-muted-foreground text-sm">Activité du rayon — par jour</CardTitle>
+        <CardTitle className="font-normal text-muted-foreground text-sm">Négatifs PRMP — corrigés vs en cours</CardTitle>
         <CardDescription className="text-foreground text-xl leading-none tracking-tight tabular-nums">
-          {lastNegatifs.toLocaleString("fr-FR")} négatifs
+          {fmtFdj(lastNegatifs)} FDJ en négatif
         </CardDescription>
         <CardAction>
           <Ellipsis className="size-4" />
@@ -95,7 +83,7 @@ export function RayonTraffic({
               tickLine={false}
               tickMargin={10}
             />
-            <YAxis axisLine={false} domain={[0, "auto"]} tickLine={false} tickMargin={6} width={36} yAxisId="activite" />
+            <YAxis axisLine={false} domain={[0, "auto"]} tickFormatter={(value: number) => fmtFdj(value)} tickLine={false} tickMargin={6} width={52} yAxisId="activite" />
             <ChartTooltip
               content={
                 <ChartTooltipContent labelFormatter={(value) => format(parseISO(String(value)), "EEEE d MMMM yyyy", { locale: fr })} />
@@ -113,11 +101,12 @@ export function RayonTraffic({
               yAxisId="activite"
             />
             <Line
-              dataKey="anomalies"
+              dataKey="corriges"
               dot={false}
-              stroke="var(--color-anomalies)"
+              stroke="var(--color-corriges)"
+              strokeDasharray="4 4"
               strokeLinecap="round"
-              strokeWidth={1.2}
+              strokeWidth={1.5}
               type="monotone"
               yAxisId="activite"
             />

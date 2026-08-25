@@ -13,10 +13,30 @@ Traite l'import d'un fichier de gamme déposé dans le chat, en un seul passage 
 2. **`gamme_import_file`** avec :
    - `path` = le chemin du fichier **tel qu'indiqué** par l'utilisateur (commence par `/home/uploads/...` ou `/app/storage/...`)
    - `rayon` = celui de l'étape 1
-3. Selon le résultat :
+3. L'import est **asynchrone** (2 à 5 minutes : comparaison J/J-1 + compensateurs LLM). Selon le `statut` renvoyé :
 
-### Si le fichier est accepté
-Présenter dans l'ordre :
+### statut = "demarre"
+- Annonce : « Import lancé, le traitement complet prend 2 à 5 minutes. »
+- **NE JAMAIS rappeler `gamme_import_file` pour le même fichier** (dédoublonnage par hash).
+- Attendre ~60 s (ou à la prochaine relance de l'utilisateur), puis :
+  1. `gamme_imports` (rayon) → statut du dernier import : `ok` / `baseline` / `erreur`
+  2. Si `ok` : `gamme_rapports` (rayon) → résumé → présenter le format ci-dessous.
+  3. Si `erreur` : expliquer le `message` simplement + proposer une correction.
+  4. Si toujours en cours : dire que le traitement continue et proposer de re-vérifier dans une minute.
+
+### statut = "deja_importe"
+- Le champ `resume_markdown` contient le résumé enregistré → le présenter tel quel.
+
+### statut = "refuse"
+- Expliquer l'`erreur` simplement (colonne manquante, doublons de codes, format, mauvais rayon…).
+- Proposer une correction concrète.
+- Ne pas réessayer le même fichier tel quel sans correction.
+
+### statut = "occupe"
+- Un autre import tourne pour ce rayon : ne rien relancer, attendre puis vérifier avec `gamme_imports`.
+
+## Format de réponse (une fois le résumé obtenu)
+
 ```
 ✅ Import du <jour> — <rayon>
 
@@ -33,11 +53,6 @@ Compensateurs : M trouvés · K sans résultat
 2. <action fournisseur>
 3. <autre>
 ```
-
-### Si le fichier est rejeté
-- Expliquer l'erreur simplement (colonne manquante, doublons de codes, format, mauvais rayon…).
-- Proposer une correction concrète.
-- Ne pas réessayer le même fichier tel quel sans correction.
 
 ## Règles
 

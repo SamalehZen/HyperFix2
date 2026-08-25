@@ -216,21 +216,18 @@ export function GammeDashboard() {
           stats={stats}
           prevResume={prev?.story?.resume ?? null}
           prevStats={prev?.stats ?? null}
-          serie={story?.serie_jours ?? null}
+          seriePrmp={story?.serie_prmp ?? null}
         />
 
         <div className="h-full xl:col-span-4">
           <InventoryGamme stats={stats} />
         </div>
         <div className="h-full xl:col-span-8">
-          <RayonTraffic
-            serieAnomalies={story?.serie_anomalies ?? null}
-            serieJours={story?.serie_jours ?? null}
-          />
+          <RayonTraffic seriePrmp={story?.serie_prmp ?? null} />
         </div>
 
         <div className="h-full xl:col-span-4">
-          <NegatifsLive story={story} jour={jour} />
+          <NegatifsLive story={story} jour={jour} loading={loading} />
         </div>
         <div className="h-full xl:col-span-8">
           <Tendance90Jours serie={story?.serie_jours ?? null} />

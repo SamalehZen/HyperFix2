@@ -4,8 +4,8 @@ import * as React from "react";
 
 import { format, parse } from "date-fns";
 import { fr } from "date-fns/locale";
-import { ArrowUpRight, DollarSign, PackageCheck, ReceiptText, RotateCcw, ShoppingBag, Users } from "lucide-react";
-import { Area, Bar, CartesianGrid, ComposedChart, XAxis, YAxis } from "recharts";
+import { ArrowUpRight, DollarSign, PackageCheck, RotateCcw, ShieldAlert, ShoppingBag, Users } from "lucide-react";
+import { Area, CartesianGrid, ComposedChart, XAxis, YAxis } from "recharts";
 
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -14,18 +14,18 @@ const revenueBucketRanges = ["01-05", "06-10", "11-15", "16-20", "21-25", "26-31
 const profitMultipliers = [0.24, 0.28, 0.26] as const;
 
 const revenueBucketValues = [
-  [4820, 5150, 5060, 5520, 5990, 6880],
-  [5140, 5360, 5520, 5860, 6120, 6720],
-  [4920, 4680, 5150, 5360, 5720, 6150],
-  [5480, 5920, 5660, 6180, 6340, 6660],
-  [5840, 6220, 6480, 6110, 6680, 7230],
-  [6280, 6740, 6960, 7120, 6780, 7240],
-  [6820, 7240, 7680, 7410, 7920, 7810],
-  [6040, 6420, 6150, 6860, 7080, 7090],
-  [5860, 6120, 6340, 6080, 6620, 6900],
-  [6520, 6840, 7060, 7420, 7160, 8280],
-  [6980, 7320, 7640, 7160, 8040, 8620],
-  [6900, 7400, 8100, 8600, 8200, 9360],
+  [482000, 515000, 506000, 552000, 599000, 688000],
+  [514000, 536000, 552000, 586000, 612000, 672000],
+  [492000, 468000, 515000, 536000, 572000, 615000],
+  [548000, 592000, 566000, 618000, 634000, 666000],
+  [584000, 622000, 648000, 611000, 668000, 723000],
+  [628000, 674000, 696000, 712000, 678000, 724000],
+  [682000, 724000, 768000, 741000, 792000, 781000],
+  [604000, 642000, 615000, 686000, 708000, 709000],
+  [586000, 612000, 634000, 608000, 662000, 690000],
+  [652000, 684000, 706000, 742000, 716000, 828000],
+  [698000, 732000, 764000, 716000, 804000, 862000],
+  [690000, 740000, 810000, 860000, 820000, 936000],
 ] as const;
 
 const monthFormatter = new Intl.DateTimeFormat("fr-FR", { month: "short" });
@@ -87,7 +87,7 @@ function formatCurrencyTooltipValue(value: unknown) {
   return typeof value === "number" ? `${value.toLocaleString("fr-FR")} FDJ` : String(value ?? "");
 }
 
-import type { GammeResume, GammeSerieJour, GammeStats } from "../_lib/gamme";
+import type { GammeResume, GammeStats, GammeSeriePrmp } from "../_lib/gamme";
 
 function fmtFdj(v: number): string {
   return v.toLocaleString("fr-FR", { maximumFractionDigits: 0 });
@@ -112,31 +112,31 @@ export function KpiStripGamme({
   stats,
   prevResume,
   prevStats,
-  serie,
+  seriePrmp,
 }: {
   resume: GammeResume | null;
   stats: GammeStats | null;
   prevResume: GammeResume | null;
   prevStats: GammeStats | null;
-  serie: GammeSerieJour[] | null;
+  seriePrmp: GammeSeriePrmp[] | null;
 }) {
   const valeurStock = stats?.valeur_stock_prmp ?? null;
   const articles = resume?.nb_articles ?? null;
   const negatifs = resume ? resume.nouveaux + resume.persistants : null;
-  const bloque = stats?.prmp_passe_negatif ?? null;
-  const anomalies = resume?.anomalies ?? null;
+  const sansCompensateur = resume ? resume.sans_compensateur : null;
+  const corrigesSous7j = stats?.corriges_sous_7j ?? null;
   const dispo = stats && stats.nb_articles > 0 ? Math.round((stats.en_stock / stats.nb_articles) * 1000) / 10 : null;
 
   const chartData = React.useMemo(() => {
-    if (!serie || serie.length === 0) return revenueOverviewData;
-    return serie.map((s) => ({
+    if (!seriePrmp || seriePrmp.length === 0) return revenueOverviewData;
+    return seriePrmp.map((s) => ({
       period: s.jour.slice(5),
-      revenue: s.total,
-      profit: s.corriges,
+      revenue: s.prmp_negatif,
+      profit: s.prmp_corrige,
     }));
-  }, [serie]);
+  }, [seriePrmp]);
 
-  const realChart = serie !== null && serie.length > 0;
+  const realChart = seriePrmp !== null && seriePrmp.length > 0;
 
   return (
     <div className="h-full overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 xl:col-span-12">
@@ -202,17 +202,17 @@ export function KpiStripGamme({
 
             <Card className="h-full rounded-none border-0 border-border border-b ring-0">
               <CardHeader>
-                <CardTitle className="font-normal text-sm">Valeur bloquée</CardTitle>
+                <CardTitle className="font-normal text-sm">Sans compensateur</CardTitle>
                 <CardDescription className="text-3xl text-foreground tabular-nums leading-none tracking-tight">
-                  {bloque === null ? "2 355 FDJ" : `${fmtFdj(bloque)} FDJ`}
+                  {sansCompensateur === null ? "3" : sansCompensateur.toLocaleString("fr-FR")}
                 </CardDescription>
                 <CardAction className="grid size-6 place-items-center rounded-sm bg-muted">
-                  <ReceiptText className="size-3 text-foreground" />
+                  <ShieldAlert className="size-3 text-foreground" />
                 </CardAction>
               </CardHeader>
               <CardContent>
                 <div className="text-sm">
-                  <Delta value={pctDelta(bloque ?? 0, prevStats?.prmp_passe_negatif)} positive={false} />{" "}
+                  <Delta value={pctDelta(sansCompensateur ?? 0, prevResume?.sans_compensateur)} positive={false} />{" "}
                   <span className="text-muted-foreground"> vs jour précédent</span>
                 </div>
               </CardContent>
@@ -220,9 +220,11 @@ export function KpiStripGamme({
 
             <Card className="h-full rounded-none border-0 border-border border-b ring-0 md:border-r md:border-b-0">
               <CardHeader>
-                <CardTitle className="font-normal text-sm">Anomalies</CardTitle>
+                <CardTitle className="font-normal text-sm">Corrigés sous 7 j</CardTitle>
                 <CardDescription className="text-3xl text-foreground tabular-nums leading-none tracking-tight">
-                  {anomalies ?? 221}
+                  {corrigesSous7j === null
+                    ? "78%"
+                    : `${corrigesSous7j.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}%`}
                 </CardDescription>
                 <CardAction className="grid size-6 place-items-center rounded-sm bg-muted">
                   <RotateCcw className="size-3 text-foreground" />
@@ -230,8 +232,8 @@ export function KpiStripGamme({
               </CardHeader>
               <CardContent>
                 <div className="text-sm">
-                  <Delta value={pctDelta(anomalies ?? 0, prevResume?.anomalies)} positive={false} />{" "}
-                  <span className="text-muted-foreground"> vs hier</span>
+                  <Delta value={pctDelta(corrigesSous7j ?? 0, prevStats?.corriges_sous_7j)} positive />{" "}
+                  <span className="text-muted-foreground"> vs jour précédent</span>
                 </div>
               </CardContent>
             </Card>
@@ -265,7 +267,7 @@ export function KpiStripGamme({
 
           <Card className="h-full rounded-none border-0 ring-0 xl:col-span-7">
             <CardHeader>
-              <CardTitle className="font-normal">Évolution — série suivie</CardTitle>
+              <CardTitle className="font-normal">Total PRMP passé négatif — par jour</CardTitle>
               <CardAction>
                 <ArrowUpRight className="size-4" />
               </CardAction>
@@ -285,7 +287,7 @@ export function KpiStripGamme({
                       </feMerge>
                     </filter>
                   </defs>
-                  <CartesianGrid yAxisId="profit" vertical={false} />
+                  <CartesianGrid yAxisId="revenue" vertical={false} />
                   <XAxis
                     dataKey="period"
                     axisLine={false}
@@ -297,8 +299,7 @@ export function KpiStripGamme({
                     tickMargin={8}
                     tickFormatter={(value) => (realChart ? String(value) : formatMonthTick(String(value)))}
                   />
-                  <YAxis yAxisId="revenue" hide domain={realChart ? [0, "dataMax + 2"] : [3000, 10_000]} />
-                  <YAxis yAxisId="profit" hide domain={realChart ? [0, "dataMax + 2"] : [0, 6000]} />
+                  <YAxis yAxisId="revenue" hide domain={realChart ? [0, "dataMax + 2"] : [300_000, 1_000_000]} />
                   <ChartTooltip
                     content={
                       <ChartTooltipContent
@@ -329,21 +330,12 @@ export function KpiStripGamme({
                       strokeDasharray: "4 4",
                     }}
                   />
-                  <Bar
-                    yAxisId="profit"
-                    barSize={4}
-                    dataKey="profit"
-                    fill="var(--color-profit)"
-                    name={realChart ? "Corrigés" : "Marge"}
-                    opacity={0.18}
-                    radius={[6, 6, 0, 0]}
-                  />
                   <Area
                     yAxisId="revenue"
                     dataKey="revenue"
                     fill="none"
                     filter="url(#mix2-kpi-glow)"
-                    name={realChart ? "Négatifs" : "Valeur"}
+                    name={realChart ? "PRMP négatif" : "Valeur"}
                     stroke="var(--color-revenue)"
                     strokeWidth={1.8}
                     type="linear"

@@ -81,6 +81,12 @@ export interface GammeSerieJour {
   critiques: number;
 }
 
+export interface GammeSeriePrmp {
+  jour: string;
+  prmp_negatif: number;
+  prmp_corrige: number;
+}
+
 export interface GammeAnomalie {
   code: number | null;
   type: string;
@@ -112,6 +118,7 @@ export interface GammeStory {
   types_anom: Record<string, number>;
   anomalies: GammeAnomalie[];
   serie_jours: GammeSerieJour[];
+  serie_prmp: GammeSeriePrmp[];
   serie_anomalies: GammeSerieAnomalies;
   negatifs: GammeNegatif[];
   corriges: GammeNegatif[];
