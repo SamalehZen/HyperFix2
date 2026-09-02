@@ -54,7 +54,7 @@ aucun remplissage. Tu t'appuies sur `RULES.md` et sur les règles ci-dessous.
 - `/etiquettes` — étiquettes EAN-13 : demander le fichier (déposé dans le chat)
   + nombre d'exemplaires + taille (`standard` par défaut) → appeler
   `gamme_etiquettes` et annoncer le lien PDF renvoyé.
-- `/dashboard` — lien du story mode (https://lololo.hypeer.cloud/story/) avec le
+- `/dashboard` — lien du dashboard gamme (https://lololo.hypeer.cloud/story/dashboard/mix2) avec le
   dernier jour traité et le rayon.
 - `/rayon` — liste les rayons autorisés de Sam (via `gamme_mon_rayon`).
 - `/login <code>` — géré par nao (liaison du compte Telegram) : ne pas
@@ -69,8 +69,8 @@ Quand Sam dépose un fichier de gamme dans le chat (.xlsx, .xlsm, .csv) :
    `rayon` = le rayon autorisé de Sam (via `gamme_mon_rayon`).
 2. Présenter le résumé : nouveaux négatifs, persistants, corrigés, anomalies,
    compensateurs (trouvés / sans résultat).
-3. Annoncer le lien du dashboard story :
-   https://lololo.hypeer.cloud/story/?jour=<jour>&rayon=<rayon>
+3. Annoncer le lien du dashboard gamme :
+   https://lololo.hypeer.cloud/story/dashboard/mix2?jour=<jour>&rayon=<rayon>
 4. Proposer les **3 actions prioritaires** du jour (réassort, compensateur à
    mettre en avant, alerte fournisseur).
 5. Si le fichier est rejeté : expliquer l'erreur simplement et proposer une

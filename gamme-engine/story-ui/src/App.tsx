@@ -6,7 +6,9 @@ import { ChartAreaInteractive } from "@/components/chart-area-interactive"
 import { ChartBarHorizontal } from "@/components/chart-bar-horizontal"
 import { ChartBarNegative } from "@/components/chart-bar-negative"
 import { ChartBarStacked } from "@/components/chart-bar-stacked"
+import { ChartMixedPRMP } from "@/components/chart-mixed-prmp"
 import { ChartPieDonutText } from "@/components/chart-pie-donut-text"
+import { ChartTreemap } from "@/components/chart-treemap"
 import { DataTable } from "@/components/data-table"
 import { SectionCards } from "@/components/section-cards"
 import { SiteHeader } from "@/components/site-header"
@@ -89,6 +91,35 @@ export default function App() {
   }, [jour, rayon, reload])
 
   const refresh = () => setReload((r) => r + 1)
+  const [palette, setPalette] = React.useState("default")
+  React.useEffect(() => {
+    const root = document.documentElement
+    if (palette === "tangerine") {
+      root.style.setProperty("--chart-1", "#ff6b35")
+      root.style.setProperty("--chart-2", "#004e89")
+      root.style.setProperty("--chart-3", "#00a896")
+      root.style.setProperty("--chart-4", "#ffb703")
+      root.style.setProperty("--chart-5", "#6a4c93")
+    } else if (palette === "brutalist") {
+      root.style.setProperty("--chart-1", "#000000")
+      root.style.setProperty("--chart-2", "#ff3b30")
+      root.style.setProperty("--chart-3", "#ffcc02")
+      root.style.setProperty("--chart-4", "#5856d6")
+      root.style.setProperty("--chart-5", "#4cd964")
+    } else if (palette === "soft-pop") {
+      root.style.setProperty("--chart-1", "#6366f1")
+      root.style.setProperty("--chart-2", "#ec4899")
+      root.style.setProperty("--chart-3", "#14b8a6")
+      root.style.setProperty("--chart-4", "#f59e0b")
+      root.style.setProperty("--chart-5", "#8b5cf6")
+    } else {
+      root.style.removeProperty("--chart-1")
+      root.style.removeProperty("--chart-2")
+      root.style.removeProperty("--chart-3")
+      root.style.removeProperty("--chart-4")
+      root.style.removeProperty("--chart-5")
+    }
+  }, [palette])
 
   return (
     <SidebarProvider
@@ -102,7 +133,22 @@ export default function App() {
       <AppSidebar jours={jours} rayon={rayon} jour={jour ?? ""} variant="inset" />
       <SidebarInset>
         {story ? (
-          <SiteHeader resume={story.resume} />
+          <div className="flex flex-col">
+            <SiteHeader resume={story.resume} />
+            <div className="flex items-center gap-2 px-4 py-2 lg:px-6 border-b bg-muted/20">
+              <span className="text-sm text-muted-foreground">Palette:</span>
+              <select
+                value={palette}
+                onChange={(e) => setPalette(e.target.value)}
+                className="h-8 rounded-md border bg-background px-2 text-sm"
+              >
+                <option value="default">Défaut sim</option>
+                <option value="tangerine">Tangerine</option>
+                <option value="brutalist">Brutalist</option>
+                <option value="soft-pop">Soft-pop</option>
+              </select>
+            </div>
+          </div>
         ) : (
           <div className="flex h-12 items-center gap-2 border-b px-4 lg:px-6">
             <Skeleton className="h-6 w-64" />
@@ -145,6 +191,34 @@ export default function App() {
                   <ChartPieDonutText resume={story.resume} />
                   <ChartBarNegative data={story.top_neg} />
                 </div>
+                {(story as any).serie_prmp && (
+                  <div className="px-4 lg:px-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Trajectoire PRMP & Négatifs (90j)</CardTitle>
+                        <CardDescription>
+                          Capital bloqué (FDJ) vs nombre de négatifs — mix area + line animé 400ms
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <ChartMixedPRMP serie={story.serie_prmp as any} />
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+                {(story as any).treemap_fournisseurs && (
+                  <div className="px-4 lg:px-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Valeur stock par fournisseur (Top 10)</CardTitle>
+                        <CardDescription>Treemap — taille = PRMP</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <ChartTreemap data={(story as any).treemap_fournisseurs} />
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 gap-4 px-4 md:grid-cols-2 lg:px-6">
                   <ChartBarHorizontal data={story.top_neg} />
                   <ChartBarStacked serie={story.serie_anomalies} />

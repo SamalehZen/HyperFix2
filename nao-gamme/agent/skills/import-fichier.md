@@ -46,7 +46,7 @@ Corrigés : Z
 Anomalies : N
 Compensateurs : M trouvés · K sans résultat
 
-📈 Dashboard : https://lololo.hypeer.cloud/story/?jour=<jour>&rayon=<rayon>
+📈 Dashboard : https://lololo.hypeer.cloud/story/dashboard/mix2?jour=<jour>&rayon=<rayon>
 
 3 actions prioritaires :
 1. <réassort / compensateur>

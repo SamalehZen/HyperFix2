@@ -12,6 +12,24 @@ from . import config
 # Le chat nao n'utilise PAS ce module (config nao_config.yaml séparée).
 _THINKING_DISABLED = {"thinking": {"type": "disabled"}}
 
+# B.AI / GLM-5.3-Flash : le paramètre thinking est rejeté (HTTP 400, le modèle
+# raisonne toujours ; seuls low/high/max sont acceptés). On ne l'envoie que
+# pour les modèles deepseek qui le supportent.
+_DISABLES_THINKING = config.MODEL.startswith("deepseek")
+
+
+def _attempts(max_tokens):
+    if _DISABLES_THINKING:
+        return [
+            {**_THINKING_DISABLED, "max_tokens": max_tokens},
+            {**_THINKING_DISABLED, "max_tokens": max_tokens * 2},
+            {"max_tokens": max_tokens * 2},
+        ]
+    return [
+        {"max_tokens": max_tokens},
+        {"max_tokens": max_tokens * 2},
+    ]
+
 
 def chat_completion(messages, temperature=0.1, max_tokens=8192):
     """Appel chat/completions avec raisonnement désactivé + garde-fous :
@@ -23,11 +41,7 @@ def chat_completion(messages, temperature=0.1, max_tokens=8192):
         "Authorization": f"Bearer {config.API_KEY}",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64 x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36",
     }
-    attempts = [
-        {**_THINKING_DISABLED, "max_tokens": max_tokens},
-        {**_THINKING_DISABLED, "max_tokens": max_tokens * 2},
-        {"max_tokens": max_tokens * 2},
-    ]
+    attempts = _attempts(max_tokens)
     last_error = None
     for opts in attempts:
         payload = {

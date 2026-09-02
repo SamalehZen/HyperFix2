@@ -50,7 +50,7 @@ Quand l'utilisateur dépose un fichier de gamme dans le chat (.xlsx, .xlsm, .csv
    du jour : nouveaux **+** persistants reportés (aggravés/stables/améliorés).
    Ne jamais présenter les seuls nouveaux comme total du jour.
 3. Annoncer le livrable généré automatiquement :
-   - **Story mode** (dashboard interactif shadcn/ui) : https://lololo.hypeer.cloud/story/?jour=<jour>&rayon=<rayon>
+   - **Dashboard gamme** (poste de pilotage mix2) : https://lololo.hypeer.cloud/story/dashboard/mix2?jour=<jour>&rayon=<rayon>
 4. Ne jamais déposer le fichier dans le dossier du projet : l'import passe par
    l'outil MCP uniquement.
 5. Si le fichier est rejeté (message d'erreur), explique l'erreur simplement et

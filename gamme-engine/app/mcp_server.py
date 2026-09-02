@@ -198,8 +198,7 @@ def gamme_import_file(path: str, rayon: str) -> str:
                 jour = resume.get("jour")
                 if jour:
                     out += (
-                        f"\n\n🎬 **Story mode (dashboard interactif)** : `/story/?jour={jour}&rayon={rayon}`"
-                        f" — URL publique : `https://<domaine>/story/?jour={jour}&rayon={rayon}`"
+                        f"\n\n🎬 **Dashboard gamme** : `{config.DASHBOARD_PATH}?jour={jour}&rayon={rayon}`"
                     )
                 out = f"(Fichier déjà importé — résumé enregistré.)\n\n{out}"
                 return json.dumps(

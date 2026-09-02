@@ -33,7 +33,7 @@ Rédige les messages Telegram du gestionnaire de gamme : compact, mobile, action
 
 Action conseillée : <réassort / compensateur / alerte fournisseur>
 
-📈 https://lololo.hypeer.cloud/story/?jour=<jour>&rayon=<rayon>
+📈 https://lololo.hypeer.cloud/story/dashboard/mix2?jour=<jour>&rayon=<rayon>
 ```
 
 ### Modèle (alerte ponctuelle)

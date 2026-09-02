@@ -83,6 +83,12 @@ export interface SerieAnomalies {
   jours: { jour: string; [type: string]: number | string }[]
 }
 
+export interface SeriePRMP {
+  jour: string
+  prmp_negatif: number
+  prmp_corrige: number
+}
+
 export interface StoryData {
   ok: boolean
   resume: Resume
@@ -91,6 +97,8 @@ export interface StoryData {
   anomalies: Anomalie[]
   serie_jours: SerieJour[]
   serie_anomalies: SerieAnomalies
+  serie_prmp: SeriePRMP[]
+  treemap_fournisseurs: { name: string; value: number }[]
   negatifs: Negatif[]
   corriges: Negatif[]
 }

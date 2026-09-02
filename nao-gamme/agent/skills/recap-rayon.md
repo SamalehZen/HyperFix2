@@ -32,7 +32,7 @@ Négatifs : X nouveaux · Y persistants · Z corrigés
 2. <action fournisseur / article à surveiller>
 3. <autre>
 
-📈 Dashboard : https://lololo.hypeer.cloud/story/?jour=<jour>&rayon=<rayon>
+📈 Dashboard : https://lololo.hypeer.cloud/story/dashboard/mix2?jour=<jour>&rayon=<rayon>
 ```
 
 ## Règles

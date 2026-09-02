@@ -31,6 +31,9 @@ lololo.hypeer.cloud {
 	handle /story-data/* {
 		reverse_proxy gamme-engine:8010
 	}
+	handle /story {
+		redir /story/ 302
+	}
 	handle /story* {
 		reverse_proxy dashboard-preview:3000
 	}

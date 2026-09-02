@@ -44,6 +44,12 @@ services:
             # Provider OpenCode Zen (pay-as-you-go) — modèle par défaut des conversations
             OPENCODE_ZEN_BASE_URL: ${OPENCODE_ZEN_BASE_URL}
             OPENCODE_ZEN_API_KEY: ${OPENCODE_ZEN_API_KEY}
+            # Provider SeekAI (nouveau provider par défaut) — modèle deepseek-v4-flash-0731
+            SEEKAI_BASE_URL: ${SEEKAI_BASE_URL}
+            SEEKAI_API_KEY: ${SEEKAI_API_KEY}
+            # Provider B.AI (provider par défaut) — modèle glm-5.3-flash
+            B_AI_BASE_URL: ${B_AI_BASE_URL}
+            B_AI_API_KEY: ${B_AI_API_KEY}
             GEMINI_API_KEY: ${GEMINI_API_KEY}
             # Bot Telegram (webhook) — config en base de données (project.telegram_settings)
             TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
@@ -92,8 +98,8 @@ services:
         ports:
             - '127.0.0.1:8010:8010'
         environment:
-            OPENCODE_BASE_URL: ${OPENCODE_ZEN_BASE_URL}
-            OPENCODE_API_KEY: ${OPENCODE_ZEN_API_KEY}
+            OPENCODE_BASE_URL: ${B_AI_BASE_URL}
+            OPENCODE_API_KEY: ${B_AI_API_KEY}
             NAO_AUTH_ISSUER: ${BETTER_AUTH_URL}
             # Resource server URL publique (PRM + audience des JWT) — via Caddy
             GAMME_MCP_URL: https://lololo.hypeer.cloud/mcp

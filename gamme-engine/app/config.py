@@ -25,6 +25,8 @@ UPLOADS_DIR = os.getenv("GAMME_UPLOADS_DIR", os.path.join(DATA_DIR, "uploads"))
 
 RAYONS_FILE = os.path.join(DATA_DIR, "rayons.json")
 
+DASHBOARD_PATH = os.getenv("GAMME_DASHBOARD_PATH", "/story/dashboard/mix2")
+
 SHEET_NAME = "Gamme_Commande"
 REQUIRED_COLUMNS = [
     "Code", "EAN", "Libellé", "Fournisseur", "Px achat fac", "Px achat tv",

@@ -26,18 +26,74 @@ repos: []
 # database and takes precedence over this block until it is deleted there.
 llm:
   providers:
+  - provider: openaiCompatible/b-ai
+    api_key: "{{ env('B_AI_API_KEY') }}"
+    base_url: "{{ env('B_AI_BASE_URL') }}"
+    models:
+    - id: glm-5.3-flash
+      name: GLM 5.3 Flash (par défaut)
+      default: true
+    - id: glm-5.3
+      name: GLM 5.3 (repli)
+      default: false
+    - id: glm-5.2
+      name: GLM 5.2 (repli)
+      default: false
+    - id: deepseek-v4-flash
+      name: DeepSeek V4 Flash (repli)
+      default: false
+    - id: kimi-k3
+      name: Kimi K3 (repli)
+      default: false
+    - id: minimax-m3
+      name: MiniMax M3 (repli)
+      default: false
+  - provider: openaiCompatible/seekai
+    api_key: "{{ env('SEEKAI_API_KEY') }}"
+    base_url: "{{ env('SEEKAI_BASE_URL') }}"
+    models:
+    - id: deepseek-v4-flash
+      name: DeepSeek V4 Flash (repli)
+      default: false
+    - id: deepseek-v4-flash-vision-exp
+      name: DeepSeek V4 Flash Vision Exp (repli)
+      default: false
+    - id: glm-5.3-flash
+      name: GLM 5.3 Flash (repli)
+      default: false
+    - id: kimi-k3
+      name: Kimi K3 (repli, testé OK)
+      default: false
+    - id: minimax-m3
+      name: MiniMax M3 (repli, testé OK)
+      default: false
+    - id: z-ai/glm-5.3-flash
+      name: GLM 5.3 Flash (z-ai)
+      default: false
+    - id: gpt-5.6-luna
+      name: GPT-5.6 Luna (repli)
+      default: false
+    - id: z-ai/glm-5.2:free
+      name: GLM 5.2 Free (z-ai)
+      default: false
   - provider: openaiCompatible/opencode-zen
     api_key: "{{ env('OPENCODE_ZEN_API_KEY') }}"
     base_url: "{{ env('OPENCODE_ZEN_BASE_URL') }}"
     models:
     - id: x-preview-f-free
-      name: Ox Alpha Free (par défaut)
-      default: true
+      name: Ox Alpha Free (repli)
+      default: false
     - id: hy3-free
       name: Hy3 Free (repli)
       default: false
+    - id: muse-spark-1.2
+      name: Muse Spark 1.2
+      default: false
+    - id: muse-spark-1.2-contributor-free
+      name: Muse Spark 1.2 Contributor Free
+      default: false
     - id: deepseek-v4-flash
-      name: DeepSeek V4 Flash (défaut dès paiement ajouté)
+      name: DeepSeek V4 Flash (repli)
       default: false
     - id: deepseek-v4-pro
       name: DeepSeek V4 Pro (rechange)
@@ -47,10 +103,13 @@ llm:
     base_url: https://opencode.ai/zen/go/v1
     models:
     - id: deepseek-v4-flash
-      name: DeepSeek V4 Flash (par défaut)
-      default: true
+      name: DeepSeek V4 Flash (repli)
+      default: false
     - id: deepseek-v4-pro
       name: DeepSeek V4 Pro (rechange)
+      default: false
+    - id: muse-spark-1.2-contributor
+      name: Muse Spark 1.2 Contributor
       default: false
     - id: kimi-k3
       name: Kimi K3 (rechange)

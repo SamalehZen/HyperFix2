@@ -23,6 +23,9 @@ nao-gamme/docs/images/
 # Divers
 .DS_Store
 
+# Sim isolé — autre projet (uilolo), ne pas versionner dans HyperFix2
+sim-gamme/
+
 # Preview du dashboard (code source versionné, artefacts ignorés)
 dashboard-preview/node_modules/
 dashboard-preview/.next/

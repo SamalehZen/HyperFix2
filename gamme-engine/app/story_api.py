@@ -222,6 +222,18 @@ def build_story_data(conn, rayon, jour):
     for a in anomalies:
         types_anom[a["type"]] = types_anom.get(a["type"], 0) + 1
 
+    # Treemap fournisseurs — valeur stock PRMP par fournisseur (top 10)
+    treemap_rows = conn.execute(
+        "SELECT fournisseur, SUM(valeur_stock_prmp) AS valeur "
+        "FROM article_history WHERE import_id = ? AND fournisseur IS NOT NULL "
+        "GROUP BY fournisseur ORDER BY valeur DESC LIMIT 10",
+        (import_id,),
+    ).fetchall()
+    treemap_data = [
+        {"name": r["fournisseur"] or "Inconnu", "value": round(r["valeur"] or 0, 2)}
+        for r in treemap_rows
+    ]
+
     nb_import = conn.execute(
         "SELECT COUNT(*) AS n FROM imports WHERE rayon = ? AND id <= ? AND statut IN ('ok','baseline')",
         (rayon, import_id),
@@ -253,6 +265,7 @@ def build_story_data(conn, rayon, jour):
         "serie_jours": _serie_jours(conn, rayon, jour),
         "serie_prmp": _serie_prmp(conn, rayon, jour),
         "serie_anomalies": _serie_anomalies(conn, rayon, jour),
+        "treemap_fournisseurs": treemap_data,
         "negatifs": negatifs,
         "corriges": corriges,
     }
