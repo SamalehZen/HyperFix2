@@ -38,18 +38,12 @@ lololo.hypeer.cloud {
 		reverse_proxy gamme-engine:8010
 	}
 	handle /story-data/* {
-		basicauth {
-			gamme $2a$14$EfxV4DNSDwyHZ5EaOM3N5eVS4LifIfWssXNPDbQCZUHh6PPDPQfju
-		}
 		reverse_proxy gamme-engine:8010
 	}
 	handle /story {
 		redir /story/ 302
 	}
 	handle /story* {
-		basicauth {
-			gamme $2a$14$EfxV4DNSDwyHZ5EaOM3N5eVS4LifIfWssXNPDbQCZUHh6PPDPQfju
-		}
 		reverse_proxy dashboard-preview:3000
 	}
 	handle /healthz {
