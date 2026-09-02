@@ -157,6 +157,12 @@ class Hierarchy:
             nom_sf, sous_famille,
         ]
 
+    def tous_secteurs_compact(self):
+        """Liste compacte des secteurs (code + nom) — pour permettre au LLM de
+        corriger de secteur lors d'un retry."""
+        secteurs = self._children.get(("secteur",), {})
+        return "\n".join(f"{code} {nom}" for code, nom in sorted(secteurs.items()))
+
 
 _HIERARCHY = None
 

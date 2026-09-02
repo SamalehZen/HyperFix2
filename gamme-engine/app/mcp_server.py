@@ -993,15 +993,20 @@ def gamme_structure_articles(libelles: str = None, fichier: str = None) -> str:
         while tentative < 3:
             user_msg = payload
             if retry_codes:
+                # Liste de TOUS les secteurs (pour corriger de secteur si l'article
+                # avait été proposé dans un mauvais secteur au premier passage).
                 secteurs = set(r.get("secteur") for r in retry_codes if r.get("secteur"))
                 sous_arbres = []
                 for sc in secteurs:
                     sous_arbres.append(h.sous_arbre_secteur(sc))
                 user_msg = (
-                    "Certaines classifications précédentes étaient invalides. "
-                    "Voici la liste des secteurs avec leurs sous-arbres valides :\n"
-                    + "\n".join(sous_arbres)
-                    + "\n\nÀ classer (uniquement les lignes invalides) :\n"
+                    "Certaines classifications précédentes étaient invalides (codes "
+                    "inexistants dans la hiérarchie). Voici la liste de TOUS les "
+                    f"secteurs possibles :\n{h.tous_secteurs_compact()}\n\n"
+                    "Et le détail des sous-arbres des secteurs proposés précédemment :\n"
+                    + "\n\n".join(sous_arbres)
+                    + "\n\nÀ classer (uniquement les lignes invalides), en renvoyant le "
+                    "même format JSON :\n"
                     + "\n".join(r.get("libelle", "") for r in retry_codes)
                 )
             try:
