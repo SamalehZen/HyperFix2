@@ -195,7 +195,7 @@ Les outils du serveur `gamme-engine` sont **toujours déjà chargés et disponib
 `gamme_mon_rayon`, `gamme_rayons`, `gamme_query`, `gamme_article`, `gamme_negatifs`,
 `gamme_anomalies`, `gamme_rapports`, `gamme_import_file`, `gamme_etiquettes`,
 `gamme_image_article`, `gamme_history_query`, `gamme_serie`, `gamme_imports`,
-`gamme_recherche_articles`, `gamme_libeller`.
+`gamme_recherche_articles`, `gamme_libeller`, `gamme_structure_articles`.
 
 - **Interdit d'explorer le système de fichiers pour « découvrir » les outils** :
   ne jamais faire `list` / `read` / `search` sur `/app/project/agent/mcps/...`,
@@ -277,6 +277,12 @@ le mettre dans un SELECT. Ne pas préfixer les colonnes par une alias inconnu
   quand l'utilisateur demande de corriger/nettoyer/standardiser des libellés,
   utiliser l'outil **`gamme_libeller(labels)`** (un libellé par ligne), sans
   demander de confirmation.
+- **Skill `structure`** (`agent/skills/structure.md`) = rappel automatique :
+  quand l'utilisateur demande de classer/structurer/ranger des articles dans la
+  hiérarchie du magasin (secteur → rayon → famille → sous-famille), utiliser
+  **`gamme_structure_articles(libelles)`** (texte un par ligne) ou
+  **`gamme_structure_articles(fichier)`** (xlsx/csv déposé), sans demander de
+  confirmation.
 
 ## Affichage : photos et graphiques (`display_chart`)
 

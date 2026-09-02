@@ -9,7 +9,9 @@ from mcp.server.auth.middleware.auth_context import get_access_token
 
 from . import auth
 from . import config
+from . import cyrus_prompt
 from . import db
+from . import hierarchy
 from . import labels
 from . import libeller_prompt
 from . import llm
@@ -911,3 +913,150 @@ def gamme_libeller(labels: str) -> str:
             ensure_ascii=False,
         )
     return content
+
+
+@mcp.tool()
+def gamme_structure_articles(libelles: str = None, fichier: str = None) -> str:
+    """Classe une liste d'articles dans la hiérarchie officielle du magasin
+    (secteur → rayon → famille → sous-famille).
+
+    ACCÈS DIRECT : dès que l'utilisateur fournit des libellés d'articles et
+    demande de les classer/structurer/ranger dans la hiérarchie (ou colle une
+    liste brute avec ou sans format), utilise cet outil automatiquement.
+
+    Entrée : soit `libelles` (chaîne, un libellé par ligne), soit `fichier`
+    (chemin d'un fichier .xlsx ou .csv déposé dans le chat — la colonne
+    « Libellé » est lue automatiquement).
+
+    Sortie : tableau structuré 9 colonnes (Libellé, Numéro secteur, Nom
+    secteur, Numéro rayon, Nom rayon, Numéro famille, Nom famille, Code
+    sous-famille, Nom sous-famille) + récapitulatif. Chaque classification
+    est validée contre la hiérarchie officielle (codes inventés = rejet +
+    retry). L'interface du chat permet de télécharger le résultat en CSV/Excel.
+    """
+    import pandas as pd
+
+    # 1. Lire les libellés
+    libelle_list = []
+    if fichier:
+        fp = config.map_nao_storage_path(fichier)
+        if not os.path.exists(fp):
+            return json.dumps(
+                {"success": False, "erreur": f"Fichier introuvable : {fichier}"},
+                ensure_ascii=False,
+            )
+        try:
+            if fp.lower().endswith(".csv"):
+                df = pd.read_csv(fp, encoding="utf-8-sig")
+            else:
+                df = pd.read_excel(fp, engine="openpyxl")
+        except Exception as e:
+            return json.dumps(
+                {"success": False, "erreur": f"Erreur lecture fichier : {e}"},
+                ensure_ascii=False,
+            )
+        # Chercher la colonne "Libellé" (ou première colonne texte)
+        col = None
+        for c in ["Libellé", "Libelle", "libellé", "libelle", "ARTICLE", "article", "Description", "description"]:
+            if c in df.columns:
+                col = c
+                break
+        if col is None:
+            col = df.columns[0]
+        libelle_list = df[col].dropna().astype(str).str.strip().tolist()
+    elif libelles:
+        libelle_list = [l.strip() for l in libelles.strip().splitlines() if l.strip()]
+    else:
+        return json.dumps(
+            {"success": False, "erreur": "Fournis soit `libelles` (texte) soit `fichier` (chemin xlsx/csv)"},
+            ensure_ascii=False,
+        )
+
+    if not libelle_list:
+        return json.dumps(
+            {"success": False, "erreur": "Aucun libellé trouvé dans l'entrée"},
+            ensure_ascii=False,
+        )
+
+    h = hierarchy.get_hierarchy()
+    prompt = cyrus_prompt.build_cyrus_prompt()
+    max_lot = config.CLASSIF_MAX_LOT
+    lots = [libelle_list[i:i + max_lot] for i in range(0, len(libelle_list), max_lot)]
+
+    all_rows = []
+    for idx, lot in enumerate(lots):
+        payload = "\n".join(lot)
+        tentative = 0
+        lot_rows = None
+        retry_codes = []
+        while tentative < 3:
+            user_msg = payload
+            if retry_codes:
+                secteurs = set(r.get("secteur") for r in retry_codes if r.get("secteur"))
+                sous_arbres = []
+                for sc in secteurs:
+                    sous_arbres.append(h.sous_arbre_secteur(sc))
+                user_msg = (
+                    "Certaines classifications précédentes étaient invalides. "
+                    "Voici la liste des secteurs avec leurs sous-arbres valides :\n"
+                    + "\n".join(sous_arbres)
+                    + "\n\nÀ classer (uniquement les lignes invalides) :\n"
+                    + "\n".join(r.get("libelle", "") for r in retry_codes)
+                )
+            try:
+                content = llm.chat_completion(
+                    [{"role": "system", "content": prompt}, {"role": "user", "content": user_msg}],
+                    temperature=0.0,
+                    max_tokens=4096,
+                    model=config.CLASSIF_MODEL,
+                    base_url=config.CLASSIF_BASE_URL,
+                    api_key=config.CLASSIF_API_KEY,
+                )
+            except Exception as e:
+                if lot_rows is None:
+                    return json.dumps(
+                        {"success": False, "erreur": f"Erreur LLM lot {idx}: {e}"},
+                        ensure_ascii=False,
+                    )
+                break
+            parsed = llm.parse_json(content)
+            articles = (parsed or {}).get("articles", []) if isinstance(parsed, dict) else []
+            if not articles:
+                break
+            valid_rows = []
+            invalid = []
+            for art in articles:
+                lib = art.get("libelle", "")
+                if not lib:
+                    continue
+                sect = art.get("secteur")
+                ray = art.get("rayon")
+                fam = art.get("famille")
+                sf = art.get("sous_famille")
+                cls = art.get("classe", True)
+                if cls and sect and ray and fam and h.valider(sect, ray, fam, sf):
+                    valid_rows.append(h.to_row(lib, sect, ray, fam, sf, True))
+                elif cls and sect and ray and fam:
+                    invalid.append(art)
+                else:
+                    valid_rows.append(h.to_row(lib, None, None, None, None, False))
+            if lot_rows is None:
+                lot_rows = valid_rows
+            else:
+                lot_rows.extend(valid_rows)
+            if not invalid:
+                break
+            retry_codes = invalid
+            tentative += 1
+        # Les invalides restants après retry → NON CLASSÉ
+        for art in retry_codes:
+            lot_rows.append(h.to_row(art.get("libelle", "?"), None, None, None, None, False))
+        if lot_rows:
+            all_rows.extend(lot_rows)
+
+    recap = h.recap(all_rows)
+    return json.dumps(
+        {"success": True, "columns": h.columns(), "rows": all_rows, "recap": recap},
+        ensure_ascii=False,
+        indent=2,
+    )
