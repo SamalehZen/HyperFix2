@@ -11,6 +11,8 @@ from . import auth
 from . import config
 from . import db
 from . import labels
+from . import libeller_prompt
+from . import llm
 from . import normalize
 from . import pipeline
 from . import query
@@ -849,3 +851,51 @@ def gamme_imports(rayon: str, limit: int = 10) -> str:
         {"success": True, "rayon": rayon, "imports": rows},
         ensure_ascii=False,
     )
+
+
+@mcp.tool()
+def gamme_libeller(labels: str) -> str:
+    """Nettoie et standardise une liste de libellés de produits bruts (Data Cleaning).
+
+    Applique une méthodologie stricte en 5 étapes : nettoyage des caractères,
+    extraction fournisseur / marque / quantité / description, recomposition
+    (ordre FOURNISSEUR MARQUE DESCRIPTION QUANTITÉ), réorganisation logique et
+    formatage final. Détecte le fournisseur (enseigne ou marque, ex. CRF →
+    CARREFOUR) et renvoie un tableau Markdown à 3 colonnes :
+    « Libellé Original | Libellé Corrigé | Fournisseur détecté », suivi d'une
+    synthèse de la répartition des fournisseurs.
+
+    Paramètre :
+    - labels : chaîne de caractères, UN libellé par ligne (séparés par \\n).
+    Utilise un modèle LLM dédié (LIBELLER_* dans .env) si configuré, sinon le
+    modèle par défaut de gamme-engine."""
+    lignes = [l.strip() for l in (labels or "").splitlines() if l.strip()]
+    if not lignes:
+        return json.dumps(
+            {"success": False, "erreur": "Aucun libellé fourni (labels vide)"},
+            ensure_ascii=False,
+        )
+    payload = "\n".join(lignes)
+    try:
+        content = llm.chat_completion(
+            [
+                {"role": "system", "content": libeller_prompt.LIBELLER_PROMPT},
+                {"role": "user", "content": payload},
+            ],
+            temperature=0.1,
+            max_tokens=4096,
+            model=config.LIBELLER_MODEL,
+            base_url=config.LIBELLER_BASE_URL,
+            api_key=config.LIBELLER_API_KEY,
+        )
+    except Exception as e:
+        return json.dumps(
+            {"success": False, "erreur": f"Erreur LLM nettoyage libellés : {e}"},
+            ensure_ascii=False,
+        )
+    if not content.strip():
+        return json.dumps(
+            {"success": False, "erreur": "Réponse LLM vide"},
+            ensure_ascii=False,
+        )
+    return content

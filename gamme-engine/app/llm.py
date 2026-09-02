@@ -18,6 +18,19 @@ _THINKING_DISABLED = {"thinking": {"type": "disabled"}}
 _DISABLES_THINKING = config.MODEL.startswith("deepseek")
 
 
+def _attempts_for_model(model, max_tokens):
+    if model.startswith("deepseek"):
+        return [
+            {**_THINKING_DISABLED, "max_tokens": max_tokens},
+            {**_THINKING_DISABLED, "max_tokens": max_tokens * 2},
+            {"max_tokens": max_tokens * 2},
+        ]
+    return [
+        {"max_tokens": max_tokens},
+        {"max_tokens": max_tokens * 2},
+    ]
+
+
 def _attempts(max_tokens):
     if _DISABLES_THINKING:
         return [
@@ -31,21 +44,25 @@ def _attempts(max_tokens):
     ]
 
 
-def chat_completion(messages, temperature=0.1, max_tokens=8192):
+def chat_completion(messages, temperature=0.1, max_tokens=8192, model=None,
+                    base_url=None, api_key=None):
     """Appel chat/completions avec raisonnement désactivé + garde-fous :
     - réponse vide/coupée (finish_reason=length) → 1 retry à budget doublé ;
     - API qui rejette le paramètre thinking (HTTP 400, modèle futur) → retry sans.
-    Lève Exception si toutes les tentatives échouent."""
-    url = f"{config.BASE_URL.rstrip('/')}/chat/completions"
+    Lève Exception si toutes les tentatives échouent.
+    Paramètres optionnels (model/base_url/api_key) : permettent d'appeler un
+    provider/modèle différent du défaut (ex. LIBELLER_* pour gamme_libeller)."""
+    url = f"{(base_url or config.BASE_URL).rstrip('/')}/chat/completions"
+    model = model or config.MODEL
     headers = {
-        "Authorization": f"Bearer {config.API_KEY}",
+        "Authorization": f"Bearer {api_key or config.API_KEY}",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64 x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36",
     }
-    attempts = _attempts(max_tokens)
+    attempts = _attempts_for_model(model, max_tokens)
     last_error = None
     for opts in attempts:
         payload = {
-            "model": config.MODEL,
+            "model": model,
             "messages": messages,
             "temperature": temperature,
             **opts,

@@ -4,6 +4,13 @@ import os
 BASE_URL = os.getenv("OPENCODE_BASE_URL", "https://opencode.ai/zen/v1")
 API_KEY = os.getenv("OPENCODE_API_KEY", "")
 MODEL = os.getenv("GAMME_LLM_MODEL", "deepseek-v4-flash-free")
+
+# Modèle dédié à la tool `gamme_libeller` (nettoyage de libellés). Si non défini,
+# il retombe sur le modèle par défaut (compensateurs). Permet de dissocier le
+# quota/provider sans toucher au code (via .env).
+LIBELLER_BASE_URL = os.getenv("LIBELLER_BASE_URL", BASE_URL)
+LIBELLER_API_KEY = os.getenv("LIBELLER_API_KEY", API_KEY)
+LIBELLER_MODEL = os.getenv("LIBELLER_MODEL", MODEL)
 DATA_DIR = os.getenv("GAMME_DATA_DIR", "/storage/gamme")
 NAO_PROJECT_DIR = os.getenv("NAO_PROJECT_DIR", "/root/nao-gamme")
 NAO_DB_PATH = os.path.join(NAO_PROJECT_DIR, "gamme.duckdb")
