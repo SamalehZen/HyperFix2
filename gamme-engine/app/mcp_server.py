@@ -988,6 +988,7 @@ def gamme_structure_articles(libelles: str = None, fichier: str = None) -> str:
         payload = "\n".join(lot)
         tentative = 0
         lot_rows = None
+        seen_libelles = set()
         retry_codes = []
         while tentative < 3:
             user_msg = payload
@@ -1027,13 +1028,14 @@ def gamme_structure_articles(libelles: str = None, fichier: str = None) -> str:
             invalid = []
             for art in articles:
                 lib = art.get("libelle", "")
-                if not lib:
+                if not lib or lib in seen_libelles:
                     continue
                 sect = art.get("secteur")
                 ray = art.get("rayon")
                 fam = art.get("famille")
                 sf = art.get("sous_famille")
                 cls = art.get("classe", True)
+                seen_libelles.add(lib)
                 if cls and sect and ray and fam and h.valider(sect, ray, fam, sf):
                     valid_rows.append(h.to_row(lib, sect, ray, fam, sf, True))
                 elif cls and sect and ray and fam:
@@ -1050,7 +1052,10 @@ def gamme_structure_articles(libelles: str = None, fichier: str = None) -> str:
             tentative += 1
         # Les invalides restants après retry → NON CLASSÉ
         for art in retry_codes:
-            lot_rows.append(h.to_row(art.get("libelle", "?"), None, None, None, None, False))
+            lib = art.get("libelle", "?")
+            if lib not in seen_libelles:
+                seen_libelles.add(lib)
+                lot_rows.append(h.to_row(lib, None, None, None, None, False))
         if lot_rows:
             all_rows.extend(lot_rows)
 

@@ -116,27 +116,31 @@ class Hierarchy:
         if total == 0:
             return "Aucun article à classifier."
         sect_counts = defaultdict(int)
+        sect_noms = defaultdict(str)
         non_classe = 0
         for r in rows:
-            sect = r[1] if len(r) > 1 else ""  # Numéro secteur
-            if sect:
-                sect_counts[sect] += 1
+            nom_sect = r[1] if len(r) > 1 else ""  # Nom secteur
+            num_sect = r[2] if len(r) > 2 else ""  # Numéro secteur
+            if num_sect:
+                sect_counts[num_sect] += 1
+                sect_noms[num_sect] = nom_sect
             else:
                 non_classe += 1
         lines = [f"**{total} articles classifiés** — {len(sect_counts)} secteurs concernés."]
         if sect_counts:
             for code, n in sorted(sect_counts.items(), key=lambda x: -x[1]):
                 pct = n / total * 100
-                lines.append(f"- Secteur {code} ({self.nom(1, code)}) : {n} articles ({pct:.0f}%)")
+                nom = sect_noms.get(code) or self.nom(1, code)
+                lines.append(f"- Secteur {code} ({nom}) : {n} article(s) ({pct:.0f}%)")
         if non_classe:
             lines.append(f"⚠️ **{non_classe} article(s) non classé(s)** — aucun secteur correspondant trouvé dans la hiérarchie.")
         return "\n".join(lines)
 
     def columns(self):
         return [
-            "Libellé", "Numéro secteur", "Nom secteur",
-            "Numéro rayon", "Nom rayon", "Numéro famille",
-            "Nom famille", "Code sous-famille", "Nom sous-famille"
+            "Libellé", "Nom secteur", "Numéro secteur",
+            "Nom rayon", "Numéro rayon", "Nom famille",
+            "Numéro famille", "Nom sous-famille", "Code sous-famille"
         ]
 
     def to_row(self, libelle, secteur, rayon, famille, sous_famille, classe=True):
@@ -147,10 +151,10 @@ class Hierarchy:
         nom_sec, nom_ray, nom_fam, nom_sf = self.nom_path(secteur, rayon, famille, sous_famille)
         return [
             libelle,
-            secteur, nom_sec,
-            rayon, nom_ray,
-            famille, nom_fam,
-            sous_famille, nom_sf,
+            nom_sec, secteur,
+            nom_ray, rayon,
+            nom_fam, famille,
+            nom_sf, sous_famille,
         ]
 
 
