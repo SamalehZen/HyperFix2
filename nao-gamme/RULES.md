@@ -168,6 +168,17 @@ promos actives à une date, expirant sous 7 jours, impact marge
     l'absence. Quand le produit demandé est en rupture, proposer les équivalents de
     la même famille ayant du stock (ex. « Petit filou » en rupture → `7673 YOPLAI
     PTS FILOUS` disponible).
+- **Nettoyage / standardisation de libellés : utiliser `gamme_libeller`.**
+  Dès que l'utilisateur fournit une liste de libellés de produits bruts (avec des
+  fautes, casse mélangée, accents, points, barres obliques, formats hétérogènes)
+  et demande (explicitement ou implicitement) de les « corriger », « nettoyer »,
+  « standardiser », « normaliser », « remettre en ordre », « reformater », ou même
+  simplement « voici des libellés, traite-les », appelle **automatiquement et sans
+  re-demander** l'outil `gamme_libeller(labels)` en passant **tous** les libellés,
+  **un par ligne** (`\n`). Ne pas poser de question de clarification : traiter
+  directement. L'outil renvoie un tableau Markdown 3 colonnes
+  (Libellé Original | Libellé Corrigé | Fournisseur détecté) + synthèse — le
+  présenter tel quel à l'utilisateur.
 - Pièges des données : colonnes avec espaces → guillemets doubles
   (`"Px achat fac"`, `"Couv. "`) ; valeurs numériques stockées en **texte** → caster
   pour calculer (`CAST("Marge %" AS DOUBLE)`) ; prix en **franc djiboutien (FDJ)** —
@@ -183,7 +194,8 @@ promos actives à une date, expirant sous 7 jours, impact marge
 Les outils du serveur `gamme-engine` sont **toujours déjà chargés et disponibles** :
 `gamme_mon_rayon`, `gamme_rayons`, `gamme_query`, `gamme_article`, `gamme_negatifs`,
 `gamme_anomalies`, `gamme_rapports`, `gamme_import_file`, `gamme_etiquettes`,
-`gamme_image_article`, `gamme_history_query`, `gamme_serie`, `gamme_imports`.
+`gamme_image_article`, `gamme_history_query`, `gamme_serie`, `gamme_imports`,
+`gamme_recherche_articles`, `gamme_libeller`.
 
 - **Interdit d'explorer le système de fichiers pour « découvrir » les outils** :
   ne jamais faire `list` / `read` / `search` sur `/app/project/agent/mcps/...`,
