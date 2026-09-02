@@ -857,7 +857,19 @@ def gamme_imports(rayon: str, limit: int = 10) -> str:
 def gamme_libeller(labels: str) -> str:
     """Nettoie et standardise une liste de libellés de produits bruts (Data Cleaning).
 
-    Applique une méthodologie stricte en 5 étapes : nettoyage des caractères,
+    QUAND L'UTILISER AUTOMATIQUEMENT (sans demander confirmation) : dès que
+    l'utilisateur fournit une ou plusieurs descriptions de produits brutes et
+    exprime — même implicitement — le besoin de les corriger/nettoyer/normaliser/
+    standardiser/reformater/remettre en ordre, ou fournit juste une liste de
+    libellés bruts. Exemples de déclencheurs : « corrige ces libellés », « nettoie
+    ces produits », « voici une liste de libellés à standardiser », « remets en
+    ordre ces descriptions », ou simplement le COLLAGE d'une liste de libellés.
+    Un libellé est considéré « brut » s'il contient des incohérences typiques :
+    casse mélangée, accents (é è à), points d'abréviation, barres obliques,
+    quantités en fin ou au début, fournisseur/marque mélangés à la description.
+    Passer TOUS les libellés fournis, un par ligne.
+
+    APPLIQUE UNE MÉTHODOLOGIE en 5 étapes : nettoyage des caractères,
     extraction fournisseur / marque / quantité / description, recomposition
     (ordre FOURNISSEUR MARQUE DESCRIPTION QUANTITÉ), réorganisation logique et
     formatage final. Détecte le fournisseur (enseigne ou marque, ex. CRF →
