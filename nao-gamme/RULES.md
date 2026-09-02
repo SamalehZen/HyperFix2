@@ -273,6 +273,10 @@ le mettre dans un SELECT. Ne pas préfixer les colonnes par une alias inconnu
   `read_xlsx`/`read_csv`) : à lire directement si besoin de comprendre les noms
   de colonnes d'un fichier — **ne jamais exécuter** `read_xlsx`/`read_csv`
   (accès fichier désactivé).
+- **Skill `libeller`** (`agent/skills/libeller.md`) = rappel automatique :
+  quand l'utilisateur demande de corriger/nettoyer/standardiser des libellés,
+  utiliser l'outil **`gamme_libeller(labels)`** (un libellé par ligne), sans
+  demander de confirmation.
 
 ## Affichage : photos et graphiques (`display_chart`)
 
