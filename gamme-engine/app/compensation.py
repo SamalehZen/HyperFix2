@@ -76,6 +76,25 @@ def to_float(v):
         return None
 
 
+def _has_root_overlap(tokens_a, tokens_b):
+    """Vrai si deux tokens partagent une racine commune d'au moins 4 lettres
+    (ex. « chocola… »/« chocol… ») ou sont identiques après stemming. Permet de
+    rapprocher les libellés hétérogènes d'une même famille (« PTS FILOUS » et
+    « Petit Filou ») même sans token strictement identique."""
+    a = sorted({t for t in tokens_a if len(t) >= 4})
+    b = sorted({t for t in tokens_b if len(t) >= 4})
+    for x in a:
+        for y in b:
+            if x == y:
+                return True
+            m = min(len(x), len(y))
+            if m >= 4 and x[:m] == y[:m]:
+                return True
+            if len(x) >= 4 and len(y) >= 4 and x[:4] == y[:4]:
+                return True
+    return False
+
+
 def score_candidate(neg, cand):
     score = 0.0
     tokens_neg, tokens_cand = neg["tokens"], cand["tokens"]
@@ -84,6 +103,8 @@ def score_candidate(neg, cand):
         union = len(tokens_neg | tokens_cand)
         jaccard = inter / union if union else 0.0
         score += jaccard * 60
+        if _has_root_overlap(tokens_neg, tokens_cand):
+            score += 15
         text_ratio = fuzz.token_sort_ratio(str(neg["libelle"]), str(cand["libelle"])) / 100
         score += text_ratio * 20
     if neg["format"] and neg["format"] == cand["format"]:

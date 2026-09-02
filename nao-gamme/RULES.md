@@ -152,7 +152,22 @@ promos actives à une date, expirant sous 7 jours, impact marge
   écris du SQL **naturel**, sans ajouter `rayon` aux colonnes SELECT ni au WHERE
   (facultatif). Exemple : `SELECT "Code", "Libellé", "Marge %" FROM gamme_commande
   WHERE "Marge %" <> '' ORDER BY CAST("Marge %" AS DOUBLE) DESC LIMIT 5`.
-- Recherche par nom d'article : `WHERE "Libellé" ILIKE '%<mot>%'` (insensible à la casse).
+- **Recherche d'article par nom : obligatoirement élargie et multi-passes.**
+  Utiliser **en priorité** l'outil `gamme_recherche_articles(terme, rayon)` (il fait
+  la recherche FR/EN, racine courte et l'élargissement automatique). Sinon, en SQL
+  libre `gamme_query` :
+  - **Racine courte** : chercher `%filou%` (et `%filous%`, `%yoplai%`, `%danonino%`)
+    plutôt qu'une expression complète `%petit filou%` — les libellés sont hétérogènes
+    (« YOPLAI PTS FILOUS PANAC », « PETITS FILOUS », « P'TIT FILOU »…).
+  - **Mots-clés multiples** : combiner en `ILIKE ... OR ILIKE ...` les variantes
+    françaises ET anglaises (oeuf/egg, yaourt/yogurt), marques et synonymes.
+  - **Jamais de filtre stock dans la première passe** : chercher large d'abord
+    (l'article demandé peut être en rupture), puis trier/filtrer par stock décroissant.
+  - **Multi-passes** : si la première requête ne donne rien d'exploitable, relancer
+    avec d'autres termes (famille, catégorie, format, marque) avant de conclure à
+    l'absence. Quand le produit demandé est en rupture, proposer les équivalents de
+    la même famille ayant du stock (ex. « Petit filou » en rupture → `7673 YOPLAI
+    PTS FILOUS` disponible).
 - Pièges des données : colonnes avec espaces → guillemets doubles
   (`"Px achat fac"`, `"Couv. "`) ; valeurs numériques stockées en **texte** → caster
   pour calculer (`CAST("Marge %" AS DOUBLE)`) ; prix en **franc djiboutien (FDJ)** —

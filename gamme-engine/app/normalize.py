@@ -46,10 +46,30 @@ def extract_format(libelle):
     return None
 
 
+def stem_fr(w):
+    """Racine française simple : singulier / forme de base pour matcher
+    les pluriels et variantes (« filous » → « filou », « petits » → « petit »,
+    « yaourts » → « yaourt »). N'affecte pas les mots courts ni les « ss »/« x »
+    qui ne sont pas des pluriels fréquents (prix, os…)."""
+    if not w or len(w) < 4:
+        return w
+    if w.endswith("ss"):
+        return w
+    if w.endswith("s") or w.endswith("x"):
+        stem = w[:-1]
+        if len(stem) >= 3:
+            return stem
+    return w
+
+
 def base_tokens(libelle):
     toks = normalize(libelle)
     fmt = extract_format(libelle)
-    out = [t for t in toks if not re.fullmatch(r"\d+[.,]?\d*", t) and not re.fullmatch(r"\d+[.,]?\d*(g|kg|ml|l|cl|dl)", t)]
+    out = [
+        stem_fr(t)
+        for t in toks
+        if not re.fullmatch(r"\d+[.,]?\d*", t) and not re.fullmatch(r"\d+[.,]?\d*(g|kg|ml|l|cl|dl)", t)
+    ]
     if fmt:
         out.append(fmt)
     return out

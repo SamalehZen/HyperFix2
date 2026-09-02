@@ -11,6 +11,7 @@ from . import auth
 from . import config
 from . import db
 from . import labels
+from . import normalize
 from . import pipeline
 from . import query
 
@@ -494,7 +495,10 @@ def gamme_query(sql: str, rayon: str) -> str:
     rayon = identifiant du rayon (obligatoire, vérifié côté serveur).
     IMPORTANT : la table `gamme_commande` est DÉJÀ FILTRÉE sur le rayon du gestionnaire
     — écris du SQL naturel, sans ajouter `rayon` aux colonnes SELECT ni au WHERE
-    (facultatif). Recherche par nom : "Libellé" ILIKE '%<mot>%'.
+    (facultatif). POUR RECHERCHER UN ARTICLE PAR NOM : utilise `gamme_recherche_articles`
+    (recherche élargie FR/EN + racine courte + multi-passes), PAS ce tool. Si tu fais
+    du SQL ILIKE ici, élargis avec une racine courte (%filou% plutôt que %petit filou%)
+    et plusieurs mots-clés en OR, sans filtrer par stock dans le WHERE.
     Pièges : les colonnes ont des espaces → guillemets doubles (« "Px achat fac" ») ;
     les valeurs numériques sont stockées en texte → caster pour calculer
     (CAST("Marge %" AS DOUBLE)) ; les prix sont en francs djiboutiens (FDJ) — ne jamais
@@ -503,6 +507,123 @@ def gamme_query(sql: str, rayon: str) -> str:
     WHERE "Marge %" <> '' ORDER BY CAST("Marge %" AS DOUBLE) DESC LIMIT 5."""
     _guard_rayon(rayon)
     return query.run_query(sql, rayon)
+
+
+# Petite table FR → EN pour élargir la recherche aux libellés anglais
+# (les libellés peuvent être rédigés en français OU en anglais selon le fournisseur).
+_FR_EN = {
+    "oeuf": "egg", "oeufs": "eggs", "lait": "milk", "beurre": "butter",
+    "glace": "ice", "poulet": "chicken", "yaourt": "yogurt", "yaourts": "yogurts",
+    "fromage": "cheese", "jambon": "ham", "pain": "bread", "eau": "water",
+    "jus": "juice", "chocolat": "chocolate", "surgel": "frozen", "surgeles": "frozen",
+    "pizza": "pizza", "frite": "fries", "frites": "fries", "poisson": "fish",
+    "crevette": "shrimp", "crevettes": "shrimp", "saumon": "salmon", "thon": "tuna",
+    "legume": "vegetable", "legumes": "vegetables", "fruit": "fruit", "fruits": "fruits",
+    "yaourts a boire": "drinking yogurt", "dessert": "dessert",
+}
+
+# Marques / familles connues pour l'élargissement de la recherche (passes supplémentaires).
+_FAMILLES = {
+    "filou": ["yoplai", "danonino", "danino", "petit filou", "p'tit filou", "petits filous"],
+    "yoplai": ["danone", "danonino", "danino", "petit filou", "p'tit filou", "petits filous"],
+    "danonino": ["danino", "yoplai", "petit filou", "p'tit filou"],
+    "yaourt": ["yogurt", "dessert", "creme", "creme dessert"],
+    "oeuf": ["egg", "oeufs"],
+}
+
+
+def _norm_termes(terme):
+    """Découpe un terme libre en mots-clés normalisés (accent + casse), puis
+    racines courtes (stem_fr) pour couvrir pluriels/singuliers et variantes."""
+    mots = normalize.normalize(terme)  # tokens nettoyés, stopwords retirés
+    stems = []
+    for m in mots:
+        s = normalize.stem_fr(m)
+        if len(s) >= 3 and s not in stems:
+            stems.append(s)
+    return stems
+
+
+def _escape_like(v):
+    return v.replace("'", "''")
+
+
+@mcp.tool()
+def gamme_recherche_articles(terme: str, rayon: str, stock_min: int = None) -> str:
+    """Recherche élargie et multi-passes d'articles par libellé dans gamme_commande.
+
+    Utilise CE OUTIL pour TOUTE recherche d'article par nom (pas du SQL libre
+    restrictif). Comportement :
+    - mots-clés multiples en français ET anglais (ex. « petit filou » cherche
+      aussi %filou%, %filous%, %yoplai%, %danonino%, %yogurt%, %egg%...)
+    - racine courte (%filou% plutôt que %petit filou%) pour couvrir les libellés
+      hétérogènes de la même famille ;
+    - élargissement automatique : si peu de résultats, relance avec marques /
+      familles / catégories, sans jamais limiter la première passe au stock ;
+    - tri par stock décroissant, filtre stock_min appliqué APRÈS l'élargissement.
+
+    Paramètres :
+    - terme : nom du produit recherché (ex. « petit filou », « yaourt », « oeuf »)
+    - rayon : identifiant du rayon (obligatoire, vérifié côté serveur)
+    - stock_min : (optionnel) ne renvoyer que les articles avec Stock >= stock_min
+    Retour : JSON {success, colonnes, lignes} trié par Stock décroissant, LIMIT 20.
+    """
+    _guard_rayon(rayon)
+    stems = _norm_termes(terme)
+    if not stems:
+        return json.dumps({"success": False, "erreur": "Terme de recherche vide"}, ensure_ascii=False)
+
+    # Passes : 1) mots-clés OR  → 2) racine principale seule  → 3) familles/marques
+    passes = [stems]
+    principale = min(stems, key=len)
+    passes.append([principale])
+    familles = []
+    for s in stems:
+        familles.extend(_FAMILLES.get(s, []))
+        fr_en = _FR_EN.get(s) or _FR_EN.get(terme.strip().lower())
+        if fr_en:
+            familles.extend([fr_en] if isinstance(fr_en, str) else fr_en)
+    if familles:
+        passes.append(list(dict.fromkeys(familles)))
+
+    seen_rows = {}
+    for mots in passes:
+        clauses = []
+        for m in mots:
+            m2 = _escape_like(m)
+            clauses.append(f'"Libellé" ILIKE \'%{m2}%\'')
+        where = " OR ".join(clauses)
+        stock_filter = ""
+        if stock_min is not None:
+            stock_filter = f' AND CAST("Stock" AS DOUBLE) >= {int(stock_min)}'
+        sql = (
+            'SELECT "Code", "Libellé", "Stock", "Px revient", "Px vente", "Marge %", "Couv. " '
+            f"FROM gamme_commande WHERE ({where}){stock_filter} "
+            'ORDER BY CAST("Stock" AS DOUBLE) DESC LIMIT 20'
+        )
+        raw = query.run_query(sql, rayon)
+        try:
+            data = json.loads(raw)
+        except Exception:
+            data = None
+        if data and data.get("success"):
+            for row in data.get("rows", []):
+                code = row[0]
+                if code not in seen_rows:
+                    seen_rows[code] = row
+        if len(seen_rows) >= 5:
+            break
+
+    if not seen_rows:
+        return json.dumps({"success": False, "erreur": f"Aucun article trouvé pour « {terme} »"},
+                          ensure_ascii=False)
+    rows = list(seen_rows.values())[:20]
+    return json.dumps({
+        "success": True,
+        "colonnes": ["Code", "Libellé", "Stock", "Px revient", "Px vente", "Marge %", "Couv. "],
+        "lignes": rows,
+        "rowCount": len(rows),
+    }, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
