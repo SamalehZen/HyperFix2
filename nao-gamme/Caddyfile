@@ -8,16 +8,25 @@ popo.hypeer.cloud {
 lololo.hypeer.cloud {
 	encode zstd gzip
 	handle /rapports/* {
+		basicauth {
+			gamme $2a$14$EfxV4DNSDwyHZ5EaOM3N5eVS4LifIfWssXNPDbQCZUHh6PPDPQfju
+		}
 		uri strip_prefix /rapports
 		root * /rapports
 		file_server browse
 	}
 	handle /etiquettes/* {
+		basicauth {
+			gamme $2a$14$EfxV4DNSDwyHZ5EaOM3N5eVS4LifIfWssXNPDbQCZUHh6PPDPQfju
+		}
 		uri strip_prefix /etiquettes
 		root * /etiquettes
 		file_server browse
 	}
 	handle /images/* {
+		basicauth {
+			gamme $2a$14$EfxV4DNSDwyHZ5EaOM3N5eVS4LifIfWssXNPDbQCZUHh6PPDPQfju
+		}
 		uri strip_prefix /images
 		root * /images
 		file_server
@@ -29,12 +38,18 @@ lololo.hypeer.cloud {
 		reverse_proxy gamme-engine:8010
 	}
 	handle /story-data/* {
+		basicauth {
+			gamme $2a$14$EfxV4DNSDwyHZ5EaOM3N5eVS4LifIfWssXNPDbQCZUHh6PPDPQfju
+		}
 		reverse_proxy gamme-engine:8010
 	}
 	handle /story {
 		redir /story/ 302
 	}
 	handle /story* {
+		basicauth {
+			gamme $2a$14$EfxV4DNSDwyHZ5EaOM3N5eVS4LifIfWssXNPDbQCZUHh6PPDPQfju
+		}
 		reverse_proxy dashboard-preview:3000
 	}
 	handle /healthz {
