@@ -5,8 +5,8 @@ popo.hypeer.cloud {
 }
 
 # Gamme Épicerie Salée — nao agent en production
+# ⚠️ PAS d'encode global zstd/gzip: bufferise le SSE /api/agent (analyzing infini) — encode seulement sur assets statiques
 lololo.hypeer.cloud {
-	encode zstd gzip
 	handle /rapports/* {
 		basicauth {
 			gamme $2a$14$EfxV4DNSDwyHZ5EaOM3N5eVS4LifIfWssXNPDbQCZUHh6PPDPQfju
