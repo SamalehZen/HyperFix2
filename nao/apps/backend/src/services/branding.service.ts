@@ -16,7 +16,8 @@ import { hasFeature } from './license.service';
 const WHITE_LABEL_FEATURE = LICENSE_FEATURES.whiteLabel;
 
 export async function isWhiteLabelEnabled(): Promise<boolean> {
-	return hasFeature(WHITE_LABEL_FEATURE);
+	// Patch HyperFix : white-label actif sans licence (serveur perso, licence OSS).
+	return true;
 }
 
 /**
