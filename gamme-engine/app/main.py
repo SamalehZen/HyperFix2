@@ -34,7 +34,7 @@ async def _lifespan(app):
         yield
 
 
-app = FastAPI(title="gamme-engine", version="2.1.0", lifespan=_lifespan)
+app = FastAPI(title="HyperFix", version="2.1.0", lifespan=_lifespan)
 
 
 def _extract_bearer(request: Request) -> str | None:
