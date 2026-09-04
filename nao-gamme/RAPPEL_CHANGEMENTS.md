@@ -13,7 +13,7 @@ Domaine : https://lololo.hypeer.cloud (derrière Cloudflare — les requêtes no
   - `gamme_engine` : moteur MCP FastAPI/FastMCP (port 8010, image locale `nao-gamme-gamme-engine`)
   - `nao_gamme_postgres` : base (healthcheck OK)
   - `nao_gamme_caddy` : HTTPS Let's Encrypt + proxy
-- `.env` (secrets) : `POSTGRES_USER=nao`, `SERVER_PORT=5005`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL=https://lololo.hypeer.cloud/`, `OPENCODE_BASE_URL=https://opencode.ai/zen/go/v1`, `OPENCODE_API_KEY=<voir .env — jamais committer>`, `GAMME_LLM_MODEL=deepseek-v4-flash`, `GAMME_MAX_LLM_ARTICLES=40`.
+- `.env` (secrets) : `POSTGRES_USER=nao`, `SERVER_PORT=5005`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL=https://lololo.hypeer.cloud/`, providers LLM `OPENCODE_*` (Go), `OPENCODE_ZEN_*` (Zen), `B_AI_*`, `SEEKAI_*`, `GAMME_LLM_MODEL=muse-spark-1.3-contributor-free` (moteur sur Zen, conversations sur B.AI `glm-5.3-flash`), `GAMME_MAX_LLM_ARTICLES=40`.
 - `chown -R 1000:1000 /opt/HyperFix2/nao-gamme` (droit d'écriture MCP pour l'utilisateur nao, uid 1000).
 
 ## 2. Corrections antérieures
@@ -69,7 +69,7 @@ Gamme-engine est un **resource server RFC 9728** : nao (better-auth) émet un **
 
 ## 4. Comptes et accès
 
-- Compte de test (seul compte utilisable pour l'instant) : `test.gestionnaire@example.com` / `Test1234!` — associé à epicerie-salee.
+- Compte de test (seul compte utilisable pour l'instant) : `test.gestionnaire@example.com` — associé à epicerie-salee. Mot de passe retiré de cette doc (voir AMELIORATIONS.md : compte à désactiver/supprimer).
 - Pour ajouter un gestionnaire : 1) créer le compte (mettre `ENABLE_USER_SIGNUP=true` dans `.env`, `docker compose up -d --force-recreate nao`, créer le compte, remettre `false`) ; 2) ajouter son email dans `/storage/gamme/rayons.json`.
 
 ## 5. Opérations courantes
@@ -91,3 +91,6 @@ docker logs -f nao_gamme / gamme_engine                # logs
 - **Session nao** : le token de session est stocké en localStorage (pas de cookie) — les scripts de test passent par le header `Authorization: Bearer <token>`.
 - **En cas de problème de connexion MCP côté nao** : nao met en cache le flag OAuth (`_oauth[gamme-engine]`) ; un `docker compose up -d --force-recreate nao` force la re-découverte.
 - Le client MCP dans `agent/mcps/mcp.json` ne doit pas avoir de header d'auth statique (le flux OAuth se fait automatiquement).
+- **Mot de passe Caddy** : `/rapports`, `/etiquettes`, `/images`, `/story-data` et `/story` derrière `basicauth` (voir `docs/securite.md`).
+- **Récap story V2** : chaque récap du jour génère un story avec graphiques (skill `recap-rayon`) ; dashboard mix2 : `/story/dashboard/mix2?jour=&rayon=` (protégé).
+- **LLM actuels (09/2026)** : conversations B.AI `glm-5.3-flash`, moteur Zen `muse-spark-1.3-contributor-free` (gratuit, `/responses`) ; `hy3-free` n'existe plus.
