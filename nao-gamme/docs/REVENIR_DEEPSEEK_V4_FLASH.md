@@ -1,3 +1,10 @@
+# ⚠️ ARCHIVÉ (2026-09-04) — procédure obsolète, ne plus suivre
+
+> `hy3-free` n'existe plus côté Zen (retiré du catalogue). État actuel :
+> conversations sur B.AI (`glm-5.3-flash` par défaut), moteur sur Zen
+> (`muse-spark-1.3-contributor-free`, gratuit, via `/responses`).
+> Document conservé pour mémoire uniquement.
+
 # Revenir à DeepSeek V4 Flash (provider Go) après réinitialisation du quota
 
 > À exécuter quand le quota hebdomadaire OpenCode **Go** est revenu
