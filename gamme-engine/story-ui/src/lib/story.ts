@@ -1,4 +1,4 @@
-// Types + client API du story mode gamme-engine
+// Types + client API du story HyperFix
 
 export interface Resume {
   jour: string
