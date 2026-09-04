@@ -1,6 +1,6 @@
-# Contributing to Studio Admin
+# Contributing to HyperFix dashboard
 
-Thanks for showing interest in improving **Studio Admin** (repo: `next-shadcn-admin-dashboard`).  
+Thanks for showing interest in improving **HyperFix dashboard** (repo: `SamalehZen/HyperFix2`, dossier `dashboard-preview`).  
 This guide will help you set up your environment and understand how to contribute.
 
 ---
@@ -34,8 +34,6 @@ src
 └── types             # TypeScript definitions
 ```
 
-If you’d like a more detailed example of this setup, check out the [Next Colocation Template](https://github.com/arhamkhnz/next-colocation-template), where the full structure is explained with examples.
-
 ---
 
 ## Getting Started
@@ -43,12 +41,12 @@ If you’d like a more detailed example of this setup, check out the [Next Coloc
 ### Fork and Clone the Repository
 
 1. Fork the Repository
-   
-   Click [here](https://github.com/arhamkhnz/next-shadcn-admin-dashboard/fork) to fork the repository.
 
-2. Clone the Repository  
+   Click [here](https://github.com/SamalehZen/HyperFix2/fork) to fork the repository.
+
+2. Clone the Repository
    ```bash
-   git clone https://github.com/YOUR_USERNAME/next-shadcn-admin-dashboard.git
+   git clone https://github.com/YOUR_USERNAME/HyperFix2.git
    ```
    
 3. Navigate into the Project  
@@ -118,7 +116,7 @@ If you’d like a more detailed example of this setup, check out the [Next Coloc
 
 ## Questions & Support
 
-- Report bugs, suggestions, or issues via [GitHub Issues](https://github.com/arhamkhnz/next-shadcn-admin-dashboard/issues)
+- Report bugs, suggestions, or issues via [GitHub Issues](https://github.com/SamalehZen/HyperFix2/issues)
 
 ---
 
