@@ -1,4 +1,4 @@
-# RULES.md — Agent Gamme (multi-rayons)
+# RULES.md — HyperFix — Agent Gamme (multi-rayons)
 
 ## Rôle
 
