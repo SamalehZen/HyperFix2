@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 
-import { Command } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
 import {
@@ -24,16 +23,19 @@ import { NavUser } from "./nav-user";
 import { SupportCard } from "./support-card";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { sidebarVariant, sidebarCollapsible, isSynced } = usePreferencesStore(
+  const { sidebarVariant, sidebarCollapsible, isSynced, resolvedThemeMode } = usePreferencesStore(
     useShallow((s) => ({
       sidebarVariant: s.values.sidebar_variant,
       sidebarCollapsible: s.values.sidebar_collapsible,
       isSynced: s.isSynced,
+      resolvedThemeMode: s.resolvedThemeMode,
     })),
   );
 
   const variant = isSynced ? sidebarVariant : props.variant;
   const collapsible = isSynced ? sidebarCollapsible : props.collapsible;
+  // Logo selon le thème : H blanc en sombre, H noir en clair.
+  const logoSrc = resolvedThemeMode === "light" ? "/story/hyper-light.png" : "/story/hyper.png";
 
   return (
     <Sidebar {...props} variant={variant} collapsible={collapsible}>
@@ -42,7 +44,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
               <Link prefetch={false} href="/dashboard/mix2">
-                <Command />
+                <img src={logoSrc} alt="HyperFix" className="size-6 rounded-md" />
                 <span className="font-semibold text-base">{APP_CONFIG.name}</span>
               </Link>
             </SidebarMenuButton>
@@ -54,7 +56,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarContent>
       <SidebarFooter>
         <SupportCard />
-        <NavUser user={rootUser} />
+        <NavUser user={{ ...rootUser, avatar: logoSrc }} />
       </SidebarFooter>
     </Sidebar>
   );
