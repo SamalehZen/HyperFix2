@@ -17,20 +17,8 @@ import {
 
 const repositories = [
   {
-    label: "Radix UI",
-    href: "https://github.com/arhamkhnz/next-shadcn-admin-dashboard",
-  },
-  {
-    label: "Base UI",
-    href: "https://github.com/arhamkhnz/next-shadcn-admin-dashboard-baseui",
-  },
-  {
-    label: "React Aria",
-    href: "https://github.com/arhamkhnz/next-shadcn-admin-dashboard-aria",
-  },
-  {
-    label: "TanStack Start",
-    href: "https://github.com/arhamkhnz/tanstack-shadcn-admin-dashboard",
+    label: "HyperFix",
+    href: "https://github.com/SamalehZen/HyperFix2",
   },
 ] as const;
 
