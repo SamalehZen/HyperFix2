@@ -1,4 +1,6 @@
-# HyperFix — Agent Gamme Épicerie Salée
+# HyperFix — Agent Gamme
+
+> HyperFix, la fixation — notre raison d'être.
 
 Plateforme complète d'analyse de la gamme pour l'épicerie salée : import quotidien
 du fichier de gamme, détection des prix/marges négatifs, suivi des anomalies,
