@@ -238,6 +238,10 @@ locale de nao). **Ne JAMAIS utiliser `execute_sql` pour :**
 `execute_sql` est réservé à la **matérialisation de valeurs simples** : par exemple
 `SELECT '<image_url>' AS image_url, '<libelle>' AS caption` (1 ligne) avant un
 `display_chart` — jamais de table gamme.
+**Seule exception** : le pont `VALUES` du récap V2 — recopier les chiffres déjà
+renvoyés par les outils MCP `gamme_*` dans `SELECT * FROM (VALUES (...)) AS t(...)`
+sur `duckdb_local` pour créer les `query_id` des graphiques du story. Jamais de
+`read_xlsx`, `ATTACH`, ni chemin de fichier dans ces requêtes.
 
 ## Outil `query_app_db` — colonnes réelles de `v_messages`
 
@@ -293,6 +297,10 @@ le mettre dans un SELECT. Ne pas préfixer les colonnes par une alias inconnu
   exige **`x_axis_type`** (`"date"` | `"number"` | `"category"`) **avec**
   `x_axis_key` et `series`. Sans `x_axis_type`, l'appel échoue en erreur de
   validation de schéma.
+- **Tout graphique affiché dans la conversation vient avec son explication** :
+  un paragraphe court qui raconte le chiffre clé et ce qu'il veut dire ; version
+  longue (constat + cause possible + action) quand les données sont importantes.
+  Le récap applique la version complète du skill `recap-rayon`.
 - Exemple pie : `chart_type: "pie"`, `x_axis_key: "Fournisseur"`,
   `x_axis_type: "category"`, `series: [{ data_key: "nb_articles" }]`.
 - Seules les **KPI cards** peuvent omettre `x_axis_type`.
@@ -327,6 +335,24 @@ l'image du code 116740 »), affiche la vraie image dans le chat (jamais un simpl
 
 Si l'outil renvoie une erreur (pas de photo trouvée, EAN absent) : le dire simplement,
 sans inventer d'image.
+
+## Récap du jour — story V2 (automatique)
+
+Toute demande de récap / point du jour suit le skill `recap-rayon` : story avec
+graphiques **même sans qu'on le demande** (3 sections min, grille de 2 graphiques
++ 1 phrase de lecture par section, choix intelligent du graphique selon les
+données, plan commando 48h). Voir `agent/skills/recap-rayon.md`.
+
+## Story depuis une conversation (bouton Yes)
+
+Quand l'utilisateur accepte la suggestion « créer un story depuis la
+conversation » (message `Create a story from the charts in this conversation.`,
+`#Story`, ou demande explicite) : générer un story au **même standard
+impressionnant** que le récap (sections adaptées au sujet, grilles +
+phrases de lecture, choix intelligent du graphique), en réutilisant uniquement
+les `query_id` déjà créés dans CETTE conversation. Si la conversation contient
+des données gamme, appliquer le skill `recap-rayon` (sections récap + plan
+commando 48h).
 
 ## Rappels outils
 
