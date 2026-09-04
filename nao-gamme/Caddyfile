@@ -9,7 +9,7 @@ popo.hypeer.cloud {
 lololo.hypeer.cloud {
 	handle /rapports/* {
 		basicauth {
-			gamme $2a$14$EfxV4DNSDwyHZ5EaOM3N5eVS4LifIfWssXNPDbQCZUHh6PPDPQfju
+			sam $2a$14$Y.KTJz00N/WkkPJP3PLMueqJztcqBBPEsKqmt4S0WI4AC32hWLfoK
 		}
 		uri strip_prefix /rapports
 		root * /rapports
@@ -17,7 +17,7 @@ lololo.hypeer.cloud {
 	}
 	handle /etiquettes/* {
 		basicauth {
-			gamme $2a$14$EfxV4DNSDwyHZ5EaOM3N5eVS4LifIfWssXNPDbQCZUHh6PPDPQfju
+			sam $2a$14$Y.KTJz00N/WkkPJP3PLMueqJztcqBBPEsKqmt4S0WI4AC32hWLfoK
 		}
 		uri strip_prefix /etiquettes
 		root * /etiquettes
@@ -25,7 +25,7 @@ lololo.hypeer.cloud {
 	}
 	handle /images/* {
 		basicauth {
-			gamme $2a$14$EfxV4DNSDwyHZ5EaOM3N5eVS4LifIfWssXNPDbQCZUHh6PPDPQfju
+			sam $2a$14$Y.KTJz00N/WkkPJP3PLMueqJztcqBBPEsKqmt4S0WI4AC32hWLfoK
 		}
 		uri strip_prefix /images
 		root * /images
@@ -38,12 +38,18 @@ lololo.hypeer.cloud {
 		reverse_proxy gamme-engine:8010
 	}
 	handle /story-data/* {
+		basicauth {
+			sam $2a$14$Y.KTJz00N/WkkPJP3PLMueqJztcqBBPEsKqmt4S0WI4AC32hWLfoK
+		}
 		reverse_proxy gamme-engine:8010
 	}
 	handle /story {
 		redir /story/ 302
 	}
 	handle /story* {
+		basicauth {
+			sam $2a$14$Y.KTJz00N/WkkPJP3PLMueqJztcqBBPEsKqmt4S0WI4AC32hWLfoK
+		}
 		reverse_proxy dashboard-preview:3000
 	}
 	handle /healthz {
