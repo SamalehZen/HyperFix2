@@ -1,4 +1,4 @@
-# HyperFix2 — Améliorations à corriger (liste de travail)
+# HyperFix — Améliorations à corriger (liste de travail)
 
 > **Statut** : liste de travail — à traiter ultérieurement, pas maintenant.
 > **Date de création** : 2026-08-28
