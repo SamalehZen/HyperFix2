@@ -19,7 +19,7 @@ export function SiteHeader({ resume }: { resume: Resume }) {
         <StoreIcon className="size-4 text-muted-foreground" />
         <h1 className="text-base font-medium">
           {resume.libelle_rayon}
-          <span className="text-muted-foreground"> · Story mode</span>
+          <span className="text-muted-foreground"> · HyperFix</span>
         </h1>
         <Badge variant="outline" className="ml-2 gap-1">
           <CalendarIcon />

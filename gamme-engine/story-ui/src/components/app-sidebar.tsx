@@ -60,7 +60,7 @@ export function AppSidebar({
               <a href={`?rayon=${encodeURIComponent(rayon)}`}>
                 <StoreIcon className="size-5!" />
                 <span className="text-base font-semibold">
-                  {jours?.libelle_rayon ?? "Gamme"}
+                  {jours?.libelle_rayon ?? "HyperFix"}
                 </span>
               </a>
             </SidebarMenuButton>
