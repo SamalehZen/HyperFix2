@@ -33,6 +33,21 @@ else
     fi
 fi
 
+# Patch truncation: muse-spark via Zen Console (Responses API) n'accepte que
+# truncation 'disabled' (pas 'auto' envoyé par défaut par nao) → sinon
+# "invalid_request_error: truncation value auto is not supported".
+TRUNC_TARGET=/app/apps/backend/src/agents/providers.ts
+if grep -q "truncation: 'disabled'" "$TRUNC_TARGET"; then
+    echo "[patch] truncation déjà patché."
+else
+    if grep -q "truncation: 'auto'" "$TRUNC_TARGET"; then
+        sed -i "s/truncation: 'auto'/truncation: 'disabled'/g" "$TRUNC_TARGET"
+        echo "[patch] truncation patché (auto → disabled pour Muse)."
+    else
+        echo "[patch] ⚠ motif truncation introuvable — patch ignoré."
+    fi
+fi
+
 # Patch reasoning_effort: les sous-agents (titre/mémoire) envoient 'none' mais
 # glm-5.3-flash (B.AI) n'accepte que low|medium|high|xhigh|max → erreurs de retry
 # qui retardent chaque réponse de 5-10s. On remplace 'none' par 'low'.

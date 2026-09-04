@@ -98,12 +98,12 @@ services:
         ports:
             - '127.0.0.1:8010:8010'
         environment:
-            OPENCODE_BASE_URL: ${B_AI_BASE_URL}
-            OPENCODE_API_KEY: ${B_AI_API_KEY}
+            OPENCODE_BASE_URL: ${OPENCODE_ZEN_BASE_URL}
+            OPENCODE_API_KEY: ${OPENCODE_ZEN_API_KEY}
             NAO_AUTH_ISSUER: ${BETTER_AUTH_URL}
             # Resource server URL publique (PRM + audience des JWT) — via Caddy
             GAMME_MCP_URL: https://lololo.hypeer.cloud/mcp
-            GAMME_LLM_MODEL: ${GAMME_LLM_MODEL:-hy3-free}
+            GAMME_LLM_MODEL: ${GAMME_LLM_MODEL:-muse-spark-1.3-contributor-free}
             GAMME_MAX_LLM_ARTICLES: ${GAMME_MAX_LLM_ARTICLES:-40}
             GAMME_DATA_DIR: /storage/gamme
             NAO_PROJECT_DIR: /app/nao-project

@@ -44,16 +44,97 @@ def _attempts(max_tokens):
     ]
 
 
+# muse-spark (1.2 / 1.3) ne parle QUE /responses sur Zen (pas /chat/completions
+# qui renvoie HTTP 500). On route ces modèles vers /responses, avec le même
+# rôle que chat_completion (instructions=system, input=user). Testé 04/09/2026 :
+# muse-spark-1.3-contributor-free -> HTTP 200, cost 0, mais ~300-600 tokens de
+# raisonnement avant la réponse -> garder un gros budget (4096+).
+def _is_responses_model(model: str) -> bool:
+    m = (model or "").lower()
+    return "muse-spark" in m or m.startswith("muse-")
+
+
+def _extract_responses_text(data: dict) -> str:
+    for bloc in data.get("output") or []:
+        if bloc.get("type") != "message":
+            continue
+        for c in bloc.get("content") or []:
+            if isinstance(c, dict) and c.get("type") == "output_text" and c.get("text"):
+                return c["text"]
+            if isinstance(c, dict) and isinstance(c.get("text"), str) and c["text"].strip():
+                return c["text"]
+    return ""
+
+
+def _responses_completion(messages, temperature=0.1, max_tokens=8192, model=None,
+                          base_url=None, api_key=None):
+    """Variante /responses pour les modèles muse-spark (Zen free)."""
+    url = f"{(base_url or config.BASE_URL).rstrip('/')}/responses"
+    headers = {
+        "Authorization": f"Bearer {api_key or config.API_KEY}",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64 x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36",
+    }
+    instructions_parts, input_parts = [], []
+    for m in messages or []:
+        role, content = m.get("role"), m.get("content") or ""
+        if role == "system":
+            instructions_parts.append(content)
+        else:
+            input_parts.append(content)
+    # muse exige max_output_tokens >= 16 et consomme ~300-600 tokens de
+    # raisonnement : on garantit un plancher à 2000 pour les petits appels.
+    budget = max(int(max_tokens or 8192), 2000)
+    attempts = [budget, budget * 2]
+    last_error = None
+    for max_out in attempts:
+        payload = {
+            "model": model,
+            "instructions": "\n\n".join(instructions_parts) if instructions_parts else None,
+            "input": "\n\n".join(input_parts),
+            "max_output_tokens": max_out,
+        }
+        if payload["instructions"] is None:
+            del payload["instructions"]
+        try:
+            resp = requests.post(url, json=payload, headers=headers, timeout=300)
+        except requests.RequestException as e:
+            last_error = f"réseau: {e}"
+            continue
+        if resp.status_code != 200:
+            last_error = f"HTTP {resp.status_code}: {resp.text[:200]}"
+            # 400 sur max_output_tokens trop petit -> retry avec budget doublé
+            continue
+        try:
+            data = resp.json()
+        except Exception as e:
+            last_error = f"JSON invalide: {e}"
+            continue
+        content = _extract_responses_text(data)
+        if content.strip():
+            return content
+        last_error = (
+            f"réponse vide (status={data.get('status')}, "
+            f"usage={data.get('usage')})"
+        )
+    raise RuntimeError(f"LLM (/responses): aucune réponse exploitable — {last_error}")
+
+
 def chat_completion(messages, temperature=0.1, max_tokens=8192, model=None,
                     base_url=None, api_key=None):
     """Appel chat/completions avec raisonnement désactivé + garde-fous :
     - réponse vide/coupée (finish_reason=length) → 1 retry à budget doublé ;
     - API qui rejette le paramètre thinking (HTTP 400, modèle futur) → retry sans.
+    - modèles muse-spark → routés vers /responses (seul endpoint supporté).
     Lève Exception si toutes les tentatives échouent.
     Paramètres optionnels (model/base_url/api_key) : permettent d'appeler un
     provider/modèle différent du défaut (ex. LIBELLER_* pour gamme_libeller)."""
-    url = f"{(base_url or config.BASE_URL).rstrip('/')}/chat/completions"
     model = model or config.MODEL
+    if _is_responses_model(model):
+        return _responses_completion(
+            messages, temperature=temperature, max_tokens=max_tokens,
+            model=model, base_url=base_url, api_key=api_key,
+        )
+    url = f"{(base_url or config.BASE_URL).rstrip('/')}/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key or config.API_KEY}",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64 x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36",

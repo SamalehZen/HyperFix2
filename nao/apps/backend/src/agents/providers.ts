@@ -88,7 +88,8 @@ export const LLM_PROVIDERS: LlmProvidersType = {
 	openai: {
 		...PROVIDER_META.openai,
 		create: (settings, modelId) => createOpenAI(settings).responses(modelId),
-		defaultOptions: { store: false, truncation: 'auto', reasoningSummary: 'auto' },
+		// Zen Console (muse-spark free) n'accepte que truncation 'disabled' (pas 'auto').
+		defaultOptions: { store: false, truncation: 'disabled', reasoningSummary: 'auto' },
 	},
 	google: {
 		...PROVIDER_META.google,

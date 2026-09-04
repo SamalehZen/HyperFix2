@@ -25,6 +25,7 @@ repos: []
 # An LLM provider edited in the app (Settings > Project > Models) is stored in the app
 # database and takes precedence over this block until it is deleted there.
 llm:
+  annotation_model: muse-spark-1.3-contributor-free
   providers:
   - provider: openaiCompatible/b-ai
     api_key: "{{ env('B_AI_API_KEY') }}"
@@ -76,32 +77,23 @@ llm:
     - id: z-ai/glm-5.2:free
       name: GLM 5.2 Free (z-ai)
       default: false
-  - provider: openaiCompatible/opencode-zen
+  - provider: openai
     api_key: "{{ env('OPENCODE_ZEN_API_KEY') }}"
     base_url: "{{ env('OPENCODE_ZEN_BASE_URL') }}"
     models:
-    - id: x-preview-f-free
-      name: Ox Alpha Free (repli)
-      default: false
-    - id: hy3-free
-      name: Hy3 Free (repli)
-      default: false
-    - id: muse-spark-1.2
-      name: Muse Spark 1.2
-      default: false
+    - id: muse-spark-1.3-contributor-free
+      name: Muse Spark 1.3 Contributor Free (par défaut)
+      default: true
     - id: muse-spark-1.2-contributor-free
-      name: Muse Spark 1.2 Contributor Free
-      default: false
-    - id: deepseek-v4-flash
-      name: DeepSeek V4 Flash (repli)
-      default: false
-    - id: deepseek-v4-pro
-      name: DeepSeek V4 Pro (rechange)
+      name: Muse Spark 1.2 Contributor Free (repli)
       default: false
   - provider: openaiCompatible/opencode
     api_key: "{{ env('OPENCODE_API_KEY') }}"
     base_url: https://opencode.ai/zen/go/v1
     models:
+    - id: x-preview-f-free
+      name: Ox Alpha Free (repli)
+      default: false
     - id: deepseek-v4-flash
       name: DeepSeek V4 Flash (repli)
       default: false
