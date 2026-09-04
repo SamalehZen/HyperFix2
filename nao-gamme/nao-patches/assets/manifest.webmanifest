@@ -1,0 +1,23 @@
+{
+  "name": "HyperFix, la fixation — notre raison d'être.",
+  "short_name": "HyperFix",
+  "description": "HyperFix, la fixation — notre raison d'être.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#171717",
+  "theme_color": "#171717",
+  "icons": [
+    {
+      "src": "/hyper-chat-logo.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/hyper-chat-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
