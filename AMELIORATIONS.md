@@ -16,20 +16,20 @@ réalisé.
   - `.env` contient en clair : clés API LLM (OPENCODE_API_KEY, OPENCODE_ZEN_API_KEY, SEEKAI_API_KEY), TELEGRAM_BOT_TOKEN, POSTGRES_PASSWORD, BETTER_AUTH_SECRET.
   - **Action** : révoquer/régénérer chaque clé, stocker via Docker secrets / vault, retirer toute clé éventuellement commitée dans l'historique git.
 
-- [ ] **Protéger les dossiers publics `/rapports/*` et `/etiquettes/*`**
-  - Caddy sert `file_server browse` sans authentification : rapports métier et étiquettes visibles par n'importe qui.
-  - **Action** : ajouter une auth (basicauth Caddy / token / réseau privé) ou retirer `browse`.
+- [x] **Protéger les dossiers publics `/rapports/*` et `/etiquettes/*`** (résolu 2026-09-04)
+  - Caddy servait `file_server browse` sans authentification.
+  - **Fait** : `basicauth sam` sur `/rapports/*`, `/etiquettes/*`, `/images/*`, `/story-data/*` et `/story*` (voir `nao-gamme/docs/securite.md`).
 
-- [ ] **Remplacer ou sécuriser le `dashboard-preview`**
-  - Service explicitement marqué « pas pour la production » mais servi publiquement sur `/story*`.
-  - **Action** : soit le retirer, soit le sécuriser, soit le remplacer par le vrai dashboard story (mix2).
+- [x] **Remplacer ou sécuriser le `dashboard-preview`** (résolu 2026-09-04)
+  - Servi publiquement sur `/story*`.
+  - **Fait** : `/story*` derrière `basicauth sam` (dashboard mix2 conservé, plus de données mock).
 
 ---
 
 ## 🟡 Moyen
 
 - [ ] **Centraliser la configuration du provider LLM (une seule source de vérité)**
-  - Dérive actuelle entre `nao_config.yaml` (SeekAI par défaut), `.env` (GAMME_LLM_MODEL, URL Go) et `docker-compose.yml`.
+  - Dérive actuelle entre `nao_config.yaml` (B.AI `glm-5.3-flash` par défaut depuis 09/2026, avant SeekAI), `.env` (GAMME_LLM_MODEL, URL Zen) et `docker-compose.yml`.
   - **Action** : documenter/valider la cohérence, ou automatiser la synchro.
 
 - [ ] **Rendre le patch OAuth robuste** (`nao-patches/patch-oauth.sh`)
@@ -57,9 +57,9 @@ réalisé.
   - `test.gestionnaire@example.com` / `Test1234!` cité dans `RAPPEL_CHANGEMENTS.md` : backdoor potentielle si encore actif.
   - **Action** : désactiver/supprimer le compte, retirer les identifiants des docs.
 
-- [ ] **Restreindre l'exposition des endpoints story/publics**
-  - `/story-data/*`, `/story*`, `/healthz` accessibles sans auth (données sensibles : stocks, prix, négatifs).
-  - **Action** : auth ou accès interne uniquement (ou au moins rate-limiting).
+- [x] **Restreindre l'exposition des endpoints story/publics** (résolu 2026-09-04)
+  - `/story-data/*` et `/story*` étaient accessibles sans auth (stocks, prix, négatifs).
+  - **Fait** : `basicauth sam` sur les deux. Reste ouvert (normal) : `/healthz`.
 
 ---
 
@@ -105,6 +105,5 @@ réalisé.
 
 ## ⚠️ À ne pas oublier (immédiat)
 
-- [ ] **Committer les 4 fichiers modifiés** (passage provider SeekAI) :
-  `nao-gamme/Caddyfile`, `nao-gamme/RULES.md`, `nao-gamme/docker-compose.yml`, `nao-gamme/nao_config.yaml`
-  — bien vérifier le contenu du diff avant commit (notamment RULES.md).
+- [x] **Récap story V2 automatique** (résolu 2026-09-04)
+  - **Fait** : skill `recap-rayon` réécrit — chaque récap donne un story avec graphiques (pont `VALUES`, 3 sections min, plan commando 48h) + dialogue « créer un story » au même standard + explication sous chaque graphique.
