@@ -64,3 +64,18 @@ momo.hypeer.cloud {
 	encode gzip
 	reverse_proxy openbot-prod-openbot-1:3001
 }
+
+# HyperFix (Gaia self-hosted) — chat gamme, TLS direct (Cloudflare DNS only)
+# ⚠️ PAS d'encode global: bufferise le SSE /api/v1/chat-stream
+gaia.hypeer.cloud {
+	# API backend (SSE chat-stream inclus, flush immediat)
+	handle /api/v1/* {
+		reverse_proxy gaia-backend:8000 {
+			flush_interval -1
+		}
+	}
+	# UI Next.js
+	handle {
+		reverse_proxy gaia-web:3000
+	}
+}

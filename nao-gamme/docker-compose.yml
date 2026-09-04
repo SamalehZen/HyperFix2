@@ -88,6 +88,9 @@ services:
             - 'host.docker.internal:host-gateway'
         depends_on:
             - nao
+        networks:
+            default: {}
+            hyperfix: null
         restart: unless-stopped
 
     gamme-engine:
@@ -123,6 +126,11 @@ services:
         ports:
             - '127.0.0.1:3001:3000'
         restart: unless-stopped
+
+networks:
+    hyperfix:
+        external: true
+        name: gaia-hyperfix_hyperfix_net
 
 volumes:
     nao_gamme_postgres_data:
