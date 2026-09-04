@@ -64,9 +64,10 @@ Interprétation :
 
 ## Analyse du 13/08/2026 (référence historique — fichier xlsx d'origine)
 
-> Chiffres de l'ancien export xlsx (12 355 articles). La base DuckDB actuelle est
-> synchronisée au **dernier import** (au 20/08/2026 : 9 403 lignes, rayon
-> `frais-surgele`) — les chiffres ci-dessous ne reflètent pas l'état courant.
+> Chiffres de l'ancien export xlsx (12 355 articles). La base DuckDB est
+> synchronisée au **dernier import** (voir `gamme_imports` pour le jour et le
+> nombre de lignes courants) — les chiffres ci-dessous ne reflètent pas
+> l'état courant.
 
 - 12 355 articles réels, 97 fournisseurs
 - 8 659 articles à stock nul (70 %)
