@@ -277,7 +277,7 @@ export default function App() {
                 </div>
                 <Separator />
                 <p className="pb-8 text-center text-xs text-muted-foreground">
-                  Généré par gamme-engine · Rayon « {story.resume.libelle_rayon} » ·
+                  Généré par HyperFix · Rayon « {story.resume.libelle_rayon} » ·
                   Import n°{story.resume.nb_import}
                 </p>
               </div>
