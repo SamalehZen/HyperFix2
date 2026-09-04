@@ -44,7 +44,10 @@ HyperFix/
 - **Docker** ≥ 24 et **Docker Compose** ≥ 2.20
   - Linux : `sudo apt install docker.io docker-compose-v2`
   - macOS/Windows : Docker Desktop
-- Une clé API **OpenCode** (ou fournisseur LLM compatible)
+- Une clé API **OpenCode Zen** (modèles gratuits, ex. `muse-spark-1.3-contributor-free`
+  pour le moteur) et/ou **B.AI** / **SeekAI** (conversations, ex. `glm-5.3-flash`).
+  Voir `nao-gamme/.env.example` pour les 4 fournisseurs (`OPENCODE_*`, `B_AI_*`,
+  `SEEKAI_*`, `OPENCODE_ZEN_*`).
 - Un domaine (optionnel) pour l'accès public via Caddy
 
 ## Installation pas à pas
@@ -110,8 +113,11 @@ curl -s http://127.0.0.1:5005/             # interface nao
 
 ```
 lololo.hypeer.cloud {
-    handle /rapports/*   { ... }
-    handle /etiquettes/* { ... }
+    handle /rapports/*   { basicauth { ... } ... }   # mot de passe requis
+    handle /etiquettes/* { basicauth { ... } ... }   # mot de passe requis
+    handle /images/*     { basicauth { ... } ... }   # mot de passe requis
+    handle /story-data/* { basicauth { ... } ... }   # mot de passe requis
+    handle /story*       { basicauth { ... } ... }   # dashboard, mot de passe requis
     handle { reverse_proxy nao:5005 }
 }
 ```
@@ -141,9 +147,12 @@ classification → anomalies → compensateurs LLM → dashboard story mode.
 
 ### Le livrable généré à chaque import
 
-**Story mode** — dashboard interactif (SPA React + shadcn/ui, servie par
-gamme-engine, données live) :
-`https://<domaine>/story/?jour=<jour>&rayon=<rayon>`
+**Story V2 dans le chat** — à chaque récap du jour, l'agent génère automatiquement
+un story avec graphiques (3 sections minimum + plan d'action 48h), voir
+`nao-gamme/agent/skills/recap-rayon.md`.
+
+**Dashboard** — poste de pilotage mix2 (protégé par mot de passe) :
+`https://<domaine>/story/dashboard/mix2?jour=<jour>&rayon=<rayon>`
 
 ### API du moteur (gamme-engine)
 
@@ -153,7 +162,7 @@ gamme-engine, données live) :
 | `GET /story/` | SPA story mode (dashboard shadcn/ui) |
 | `GET /story-data/jours?rayon=` | Jours disponibles (navigation story mode) |
 | `GET /story-data/YYYY-MM-DD?rayon=` | Données complètes du story mode |
-| MCP (port 8010) | Outils `gamme_import_file`, `gamme_rapports`, `gamme_negatifs`, `gamme_anomalies`, `gamme_etiquettes`, `gamme_rayons`… |
+| MCP (port 8010) | Outils `gamme_mon_rayon`, `gamme_import_file`, `gamme_serie`, `gamme_rapports`, `gamme_negatifs`, `gamme_anomalies`, `gamme_article`, `gamme_etiquettes`, `gamme_libeller`, `gamme_structure_articles`, `gamme_rayons`… |
 
 ## Commandes utiles
 
@@ -182,4 +191,7 @@ docker compose down -v              # arrêter ET supprimer les volumes (⚠️)
   `nao_config.yaml` — aucun secret en clair dans le code.
 - Les services internes (nao :5005, moteur :8010) n'écoutent que sur
   `127.0.0.1` ; seul Caddy (80/443) est exposé publiquement.
+- Les chemins `/rapports`, `/etiquettes`, `/images`, `/story-data` et `/story`
+  sont protégés par mot de passe (`basicauth` dans le `Caddyfile`). Voir
+  `nao-gamme/docs/securite.md` pour l'inventaire complet.
 - Pensez à **révoquer toute clé qui aurait déjà été commitée** par le passé.
