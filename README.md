@@ -111,10 +111,10 @@ curl -s http://127.0.0.1:5005/             # interface nao
 
 ### 6. Configurer le domaine (optionnel, production)
 
-Éditez `Caddyfile` et remplacez `lololo.hypeer.cloud` par votre domaine :
+Éditez `Caddyfile` et remplacez `gestion.hypeer.cloud` par votre domaine :
 
 ```
-lololo.hypeer.cloud {
+gestion.hypeer.cloud {
     handle /rapports/*   { basicauth { ... } ... }   # mot de passe requis
     handle /etiquettes/* { basicauth { ... } ... }   # mot de passe requis
     handle /images/*     { basicauth { ... } ... }   # mot de passe requis

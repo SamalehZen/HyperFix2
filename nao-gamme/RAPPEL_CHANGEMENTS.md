@@ -1,7 +1,7 @@
 # HyperFix2 — Récapitulatif des changements (mémo)
 
 Date : 14/08/2026 — Serveur : Ubuntu 24.04, Docker 29.7.2 / Compose v5.4.0
-Domaine : https://lololo.hypeer.cloud (derrière Cloudflare — les requêtes non-navigateur sont bloquées : tous les scripts/test utilisent un User-Agent navigateur).
+Domaine : https://gestion.hypeer.cloud (derrière Cloudflare — les requêtes non-navigateur sont bloquées : tous les scripts/test utilisent un User-Agent navigateur).
 
 ---
 
@@ -13,12 +13,12 @@ Domaine : https://lololo.hypeer.cloud (derrière Cloudflare — les requêtes no
   - `gamme_engine` : moteur MCP FastAPI/FastMCP (port 8010, image locale `nao-gamme-gamme-engine`)
   - `nao_gamme_postgres` : base (healthcheck OK)
   - `nao_gamme_caddy` : HTTPS Let's Encrypt + proxy
-- `.env` (secrets) : `POSTGRES_USER=nao`, `SERVER_PORT=5005`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL=https://lololo.hypeer.cloud/`, providers LLM `OPENCODE_*` (Go), `OPENCODE_ZEN_*` (Zen), `B_AI_*`, `SEEKAI_*`, `GAMME_LLM_MODEL=muse-spark-1.3-contributor-free` (moteur sur Zen, conversations sur B.AI `glm-5.3-flash`), `GAMME_MAX_LLM_ARTICLES=40`.
+- `.env` (secrets) : `POSTGRES_USER=nao`, `SERVER_PORT=5005`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL=https://gestion.hypeer.cloud/`, providers LLM `OPENCODE_*` (Go), `OPENCODE_ZEN_*` (Zen), `B_AI_*`, `SEEKAI_*`, `GAMME_LLM_MODEL=muse-spark-1.3-contributor-free` (moteur sur Zen, conversations sur B.AI `glm-5.3-flash`), `GAMME_MAX_LLM_ARTICLES=40`.
 - `chown -R 1000:1000 /opt/HyperFix2/nao-gamme` (droit d'écriture MCP pour l'utilisateur nao, uid 1000).
 
 ## 2. Corrections antérieures
 
-- **« Invalid origin » à l'inscription** : `BETTER_AUTH_URL` était `http://localhost:5005/` → corrigé en `https://lololo.hypeer.cloud/`.
+- **« Invalid origin » à l'inscription** : `BETTER_AUTH_URL` était `http://localhost:5005/` → corrigé en `https://gestion.hypeer.cloud/`.
 - **« Configure a model »** : dans `nao_config.yaml`, `api_key: {{ env('OPENCODE_API_KEY') }}` sans guillemets était parsé comme un objet YAML et faisait rejeter tout le bloc `llm` → guillemets ajoutés : `api_key: "{{ env('OPENCODE_API_KEY') }}"`.
 
 ## 3. Isolation stricte serveur (objectif : chaque gestionnaire ne voit que son rayon)
@@ -87,7 +87,7 @@ docker logs -f nao_gamme / gamme_engine                # logs
 ## 6. Points de vigilance
 
 - **Mise à jour de l'image nao** : le patch `patch-oauth.sh` échoue si le motif `validAudiences: [env.BETTER_AUTH_URL, MCP_SERVER_URL]` n'existe plus dans `auth.ts` → adapter le sed.
-- **Cloudflare** : tout appel HTTP depuis les conteneurs/scripts vers https://lololo.hypeer.cloud doit avoir un User-Agent navigateur, sinon 403.
+- **Cloudflare** : tout appel HTTP depuis les conteneurs/scripts vers https://gestion.hypeer.cloud doit avoir un User-Agent navigateur, sinon 403.
 - **Session nao** : le token de session est stocké en localStorage (pas de cookie) — les scripts de test passent par le header `Authorization: Bearer <token>`.
 - **En cas de problème de connexion MCP côté nao** : nao met en cache le flag OAuth (`_oauth[gamme-engine]`) ; un `docker compose up -d --force-recreate nao` force la re-découverte.
 - Le client MCP dans `agent/mcps/mcp.json` ne doit pas avoir de header d'auth statique (le flux OAuth se fait automatiquement).

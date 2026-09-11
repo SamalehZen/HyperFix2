@@ -41,7 +41,7 @@ réalisé.
   - Le dépôt n'est pas aligné sur les sous-dossiers par rayon (`depot/frais-surgele`, `depot/epicerie-salee/...`).
   - **Action** : chemin corrigé + dépôt par rayon + vérification que le fichier a bien été pris en compte (au lieu d'un simple timeout).
 
-- [ ] **Revoir les `extra_hosts` (`lololo.hypeer.cloud:host-gateway`)**
+- [ ] **Revoir les `extra_hosts` (`gestion.hypeer.cloud:host-gateway`)**
   - Le domaine public pointe vers l'hôte Docker dans les conteneurs : risque de pivot si un conteneur est compromis.
   - **Action** : limiter les accès, séparer le trafic interne, réseau dédié.
 
