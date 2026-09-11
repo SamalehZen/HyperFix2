@@ -392,7 +392,7 @@ def gamme_article(code: int, rayon: str) -> str:
 @mcp.tool()
 def gamme_image_article(code: int, rayon: str) -> str:
     """Photo réelle d'un article depuis son code barre (EAN) : télécharge l'image
-    depuis Open Food Facts et la publie sous https://lololo.hypeer.cloud/images/...
+    depuis Open Food Facts et la publie sous https://gestion.hypeer.cloud/images/...
     pour l'afficher dans le chat (via execute_sql + display_chart product_image)."""
     import requests
 
@@ -475,7 +475,7 @@ def gamme_image_article(code: int, rayon: str) -> str:
                 "code": code,
                 "ean": ean,
                 "libelle": nom,
-                "image_url": f"https://lololo.hypeer.cloud/images/{ean}{ext}",
+                "image_url": f"https://gestion.hypeer.cloud/images/{ean}{ext}",
                 "note": (
                     "Pour afficher la photo dans le chat, fais maintenant execute_sql avec "
                     "SELECT '<image_url>' AS image_url, '<libelle>' AS caption puis "

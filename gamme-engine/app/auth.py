@@ -23,7 +23,7 @@ _UA = {
     ),
 }
 
-ISSUER = os.getenv("NAO_AUTH_ISSUER", "https://lololo.hypeer.cloud").rstrip("/")
+ISSUER = os.getenv("NAO_AUTH_ISSUER", "https://gestion.hypeer.cloud").rstrip("/")
 GAMME_MCP_URL = os.getenv("GAMME_MCP_URL", "http://gamme_engine:8010/")
 AUDIENCES = {
     ISSUER,

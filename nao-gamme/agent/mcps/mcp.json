@@ -3,7 +3,7 @@
         "gamme-engine": {
             "type": "http",
             "transport": "streamable-http",
-            "url": "https://lololo.hypeer.cloud/mcp"
+            "url": "https://gestion.hypeer.cloud/mcp"
         }
     }
 }

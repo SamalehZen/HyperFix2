@@ -12,7 +12,7 @@ from reportlab.pdfgen import canvas
 from . import config
 
 OUT_DIR = os.path.join(config.NAO_PROJECT_DIR, "docs", "etiquettes")
-PUBLIC_BASE = "https://lololo.hypeer.cloud/etiquettes"
+PUBLIC_BASE = "https://gestion.hypeer.cloud/etiquettes"
 RETENTION_DAYS = 1  # les PDF d'étiquettes sont supprimés automatiquement après 24 h
 
 LABEL_W = 95 * mm
