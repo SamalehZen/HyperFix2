@@ -1,21 +1,21 @@
 import json
 import os
 
-BASE_URL = os.getenv("OPENCODE_BASE_URL", "https://opencode.ai/zen/v1")
-API_KEY = os.getenv("OPENCODE_API_KEY", "")
-MODEL = os.getenv("GAMME_LLM_MODEL", "deepseek-v4-flash-free")
+BASE_URL = os.getenv("OPENCODE_BASE_URL") or "https://api.experientiallabs.ai/v1"
+API_KEY = os.getenv("OPENCODE_API_KEY") or ""
+MODEL = os.getenv("GAMME_LLM_MODEL") or "gpt-5.6-luna"
 
-# Modèle dédié à la tool `gamme_libeller` (nettoyage de libellés). Si non défini,
-# il retombe sur le modèle par défaut (compensateurs). Permet de dissocier le
-# quota/provider sans toucher au code (via .env).
-LIBELLER_BASE_URL = os.getenv("LIBELLER_BASE_URL", BASE_URL)
-LIBELLER_API_KEY = os.getenv("LIBELLER_API_KEY", API_KEY)
-LIBELLER_MODEL = os.getenv("LIBELLER_MODEL", MODEL)
+# Modèle dédié à la tool `gamme_libeller` (nettoyage de libellés). Si non défini
+# ou vide, il retombe sur le modèle par défaut (compensateurs). Permet de dissocier le
+# quota/provider sans toucher au code (via .env). Vide = 100% luna via défaut.
+LIBELLER_BASE_URL = os.getenv("LIBELLER_BASE_URL") or BASE_URL
+LIBELLER_API_KEY = os.getenv("LIBELLER_API_KEY") or API_KEY
+LIBELLER_MODEL = os.getenv("LIBELLER_MODEL") or MODEL
 
-# Classification hiérarchique (gamme_structure_articles)
-CLASSIF_BASE_URL = os.getenv("CLASSIF_BASE_URL", BASE_URL)
-CLASSIF_API_KEY = os.getenv("CLASSIF_API_KEY", API_KEY)
-CLASSIF_MODEL = os.getenv("CLASSIF_MODEL", MODEL)
+# Classification hiérarchique (gamme_structure_articles) — même repli vide -> défaut.
+CLASSIF_BASE_URL = os.getenv("CLASSIF_BASE_URL") or BASE_URL
+CLASSIF_API_KEY = os.getenv("CLASSIF_API_KEY") or API_KEY
+CLASSIF_MODEL = os.getenv("CLASSIF_MODEL") or MODEL
 CLASSIF_MAX_LOT = int(os.getenv("CLASSIF_MAX_LOT", "20"))
 DATA_DIR = os.getenv("GAMME_DATA_DIR", "/storage/gamme")
 NAO_PROJECT_DIR = os.getenv("NAO_PROJECT_DIR", "/root/nao-gamme")
