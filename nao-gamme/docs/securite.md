@@ -4,11 +4,11 @@
 
 | Chemin | Contenu |
 |---|---|
-| `https://lololo.hypeer.cloud/rapports` | Rapports générés |
-| `https://lololo.hypeer.cloud/etiquettes` | PDF d'étiquettes EAN-13 |
-| `https://lololo.hypeer.cloud/images` | Photos articles |
-| `https://lololo.hypeer.cloud/story-data` | Données du story (négatifs, PRMP, anomalies) |
-| `https://lololo.hypeer.cloud/story` | Dashboard mix2 |
+| `https://gestion.hypeer.cloud/rapports` | Rapports générés |
+| `https://gestion.hypeer.cloud/etiquettes` | PDF d'étiquettes EAN-13 |
+| `https://gestion.hypeer.cloud/images` | Photos articles |
+| `https://gestion.hypeer.cloud/story-data` | Données du story (négatifs, PRMP, anomalies) |
+| `https://gestion.hypeer.cloud/story` | Dashboard mix2 |
 
 Identifiant et mot de passe : demandés au gestionnaire (jamais écrits ici ni
 dans git — seul le hash bcrypt est dans le `Caddyfile`).

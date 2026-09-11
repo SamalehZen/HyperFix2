@@ -56,11 +56,11 @@ docker compose up -d --build
 
 echo "=== 8/8 Vérifications ==="
 sleep 10
-curl -sf -o /dev/null https://lololo.hypeer.cloud/healthz && echo "  healthz OK" || echo "  healthz ECHEC (DNS pas encore basculé ?)"
-curl -sf -o /dev/null https://lololo.hypeer.cloud/story/dashboard/mix2 && echo "  dashboard OK" || echo "  dashboard ECHEC"
+curl -sf -o /dev/null https://gestion.hypeer.cloud/healthz && echo "  healthz OK" || echo "  healthz ECHEC (DNS pas encore basculé ?)"
+curl -sf -o /dev/null https://gestion.hypeer.cloud/story/dashboard/mix2 && echo "  dashboard OK" || echo "  dashboard ECHEC"
 
 echo
 echo "[restore] Terminé. Pensez à :"
-echo "  1. Pointer le DNS lololo.hypeer.cloud vers cette machine"
+echo "  1. Pointer le DNS gestion.hypeer.cloud vers cette machine"
 echo "  2. ./scripts/verify-migration.sh"
 echo "  3. Le .env a été restauré depuis le paquet ; vérifiez-le : $REPO/nao-gamme/.env"

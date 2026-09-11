@@ -5,7 +5,7 @@
 # ============================================================
 set -uo pipefail
 
-URL="${1:-https://lololo.hypeer.cloud}"
+URL="${1:-https://gestion.hypeer.cloud}"
 FAIL=0
 
 check() {

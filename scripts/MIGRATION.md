@@ -1,7 +1,7 @@
 # Migration HyperFix — Guide complet (ancien VPS → nouveau VPS)
 
 > Projet : **SamalehZen/HyperFix2** (public sur GitHub)
-> Domaine : `lololo.hypeer.cloud` (DNS via Cloudflare)
+> Domaine : `gestion.hypeer.cloud` (DNS via Cloudflare)
 > Date de préparation : 2026-08-19
 > Statut : paquet de migration déjà généré et testé (`/root/migration/mig-2026-08-19`)
 
@@ -46,7 +46,7 @@
 1. Provisionner le nouveau VPS (Ubuntu 22.04/24.04, ≥ 2 Go RAM, ≥ 20 Go disque).
 2. Installer : `apt update && apt install -y docker.io docker-compose-v2 git`
 3. Activer Docker : `systemctl enable --now docker`
-4. **Baisser le TTL du record DNS** `lololo.hypeer.cloud` (ex. 60 s) pour une propagation rapide.
+4. **Baisser le TTL du record DNS** `gestion.hypeer.cloud` (ex. 60 s) pour une propagation rapide.
 
 ### Phase 1 — Paquet frais de dernière minute (sur l'ANCIEN VPS)
 ```bash
@@ -61,8 +61,8 @@ Transférer le paquet vers le nouveau VPS : `scp -r /root/migration/mig-* user@<
 Le script : clone GitHub → restaure les données → Postgres → certificats → permissions (UID 1000) → `docker compose up -d --build` → premières vérifs.
 
 ### Phase 3 — Bascule DNS + validation
-1. Cloudflare : record A `lololo.hypeer.cloud` → **nouvelle IP**.
-2. Vérifier : `dig lololo.hypeer.cloud` (nouvelle IP) puis `./scripts/verify-migration.sh`
+1. Cloudflare : record A `gestion.hypeer.cloud` → **nouvelle IP**.
+2. Vérifier : `dig gestion.hypeer.cloud` (nouvelle IP) puis `./scripts/verify-migration.sh`
 3. Points à contrôler manuellement : login nao, import de fichiers, alerte Telegram (webhook défini par domaine → OK automatiquement), certificat TLS (certs restaurés, aucune ré-émission).
 
 ### Phase 4 — Fin de vie
