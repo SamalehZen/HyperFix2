@@ -10,14 +10,13 @@ MARKER="GAMME_ENGINE_MCP_URL"
 
 if grep -q "$MARKER" "$TARGET"; then
     echo "[patch] validAudiences déjà patché."
+elif grep -q "validAudiences: MCP_VALID_AUDIENCES" "$TARGET"; then
+    echo "[patch] image nao récente (MCP_VALID_AUDIENCES = BETTER_AUTH_URL + /mcp, déjà notre URL publique) — rien à patcher."
+elif grep -q "validAudiences: \[env.BETTER_AUTH_URL, MCP_SERVER_URL\]" "$TARGET"; then
+    sed -i 's|validAudiences: \[env.BETTER_AUTH_URL, MCP_SERVER_URL\]|validAudiences: [env.BETTER_AUTH_URL, MCP_SERVER_URL, process.env.GAMME_ENGINE_MCP_URL ?? "http://gamme_engine:8010/"]|' "$TARGET"
+    echo "[patch] validAudiences patché (audience gamme-engine autorisée)."
 else
-    if grep -q "validAudiences: \[env.BETTER_AUTH_URL, MCP_SERVER_URL\]" "$TARGET"; then
-        sed -i 's|validAudiences: \[env.BETTER_AUTH_URL, MCP_SERVER_URL\]|validAudiences: [env.BETTER_AUTH_URL, MCP_SERVER_URL, process.env.GAMME_ENGINE_MCP_URL ?? "http://gamme_engine:8010/"]|' "$TARGET"
-        echo "[patch] validAudiences patché (audience gamme-engine autorisée)."
-    else
-        echo "[patch] ⚠ motif introuvable dans auth.ts — mise à jour de l'image nao ? Patch à adapter."
-        exit 1
-    fi
+    echo "[patch] ⚠ motif introuvable dans auth.ts — mise à jour de l'image nao ? Patch ignoré (boot non bloqué)."
 fi
 
 # Patch display_chart: rend x_axis_type optionnel avec défaut 'category' (évite Failed: Display Chart quand LLM oublie)
