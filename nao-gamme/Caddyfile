@@ -1,15 +1,9 @@
-# OpenMausBot — personal cloud behind Cloudflare proxy (migré depuis le caddy système)
-popo.hypeer.cloud {
-	encode gzip
-	reverse_proxy host.docker.internal:8800
-}
-
-# Gamme Épicerie Salée — nao agent en production
+# HyperFix prod — gestion.hypeer.cloud (DNS uniquement, TLS direct Caddy)
 # ⚠️ PAS d'encode global zstd/gzip: bufferise le SSE /api/agent (analyzing infini) — encode seulement sur assets statiques
-lololo.hypeer.cloud {
+gestion.hypeer.cloud {
 	handle /rapports/* {
 		basicauth {
-			sam $2a$14$Y.KTJz00N/WkkPJP3PLMueqJztcqBBPEsKqmt4S0WI4AC32hWLfoK
+			sam $2a$14$b2ZgCQV5hBNmGPNdJTJkxOmvwXOw4PVxBC8wBw1nMqzwW/H5L8cI2
 		}
 		uri strip_prefix /rapports
 		root * /rapports
@@ -17,7 +11,7 @@ lololo.hypeer.cloud {
 	}
 	handle /etiquettes/* {
 		basicauth {
-			sam $2a$14$Y.KTJz00N/WkkPJP3PLMueqJztcqBBPEsKqmt4S0WI4AC32hWLfoK
+			sam $2a$14$b2ZgCQV5hBNmGPNdJTJkxOmvwXOw4PVxBC8wBw1nMqzwW/H5L8cI2
 		}
 		uri strip_prefix /etiquettes
 		root * /etiquettes
@@ -25,7 +19,7 @@ lololo.hypeer.cloud {
 	}
 	handle /images/* {
 		basicauth {
-			sam $2a$14$Y.KTJz00N/WkkPJP3PLMueqJztcqBBPEsKqmt4S0WI4AC32hWLfoK
+			sam $2a$14$b2ZgCQV5hBNmGPNdJTJkxOmvwXOw4PVxBC8wBw1nMqzwW/H5L8cI2
 		}
 		uri strip_prefix /images
 		root * /images
@@ -39,7 +33,7 @@ lololo.hypeer.cloud {
 	}
 	handle /story-data/* {
 		basicauth {
-			sam $2a$14$Y.KTJz00N/WkkPJP3PLMueqJztcqBBPEsKqmt4S0WI4AC32hWLfoK
+			sam $2a$14$b2ZgCQV5hBNmGPNdJTJkxOmvwXOw4PVxBC8wBw1nMqzwW/H5L8cI2
 		}
 		reverse_proxy gamme-engine:8010
 	}
@@ -48,7 +42,7 @@ lololo.hypeer.cloud {
 	}
 	handle /story* {
 		basicauth {
-			sam $2a$14$Y.KTJz00N/WkkPJP3PLMueqJztcqBBPEsKqmt4S0WI4AC32hWLfoK
+			sam $2a$14$b2ZgCQV5hBNmGPNdJTJkxOmvwXOw4PVxBC8wBw1nMqzwW/H5L8cI2
 		}
 		reverse_proxy dashboard-preview:3000
 	}
@@ -57,25 +51,5 @@ lololo.hypeer.cloud {
 	}
 	handle {
 		reverse_proxy nao:5005
-	}
-}
-# OpenBot — momo.hypeer.cloud
-momo.hypeer.cloud {
-	encode gzip
-	reverse_proxy openbot-prod-openbot-1:3001
-}
-
-# HyperFix (Gaia self-hosted) — chat gamme, TLS direct (Cloudflare DNS only)
-# ⚠️ PAS d'encode global: bufferise le SSE /api/v1/chat-stream
-gaia.hypeer.cloud {
-	# API backend (SSE chat-stream inclus, flush immediat)
-	handle /api/v1/* {
-		reverse_proxy gaia-backend:8000 {
-			flush_interval -1
-		}
-	}
-	# UI Next.js
-	handle {
-		reverse_proxy gaia-web:3000
 	}
 }
