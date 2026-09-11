@@ -27,7 +27,7 @@ minimum, plan commando 48h.
    - Chaque graphique (sauf `kpi_card`) exige `x_axis_type` + `x_axis_key` + `series`.
    - **Chaque graphique expliqué** : juste après chaque `display_chart` dans la conversation, écris son explication adaptée — paragraphe court (2-3 phrases : le chiffre clé + ce qu'il veut dire) par défaut ; version longue (constat + cause possible + action) quand les données sont importantes : nouveau négatif critique, gros capital bloqué PRMP, chute forte de stock, marge très négative, anomalie grave. On doit aimer lire la conversation, pas juste voir des graphiques à la chaîne.
 5. **Plan d'action commando 48h** : commandes urgentes, compensateurs avec codes (depuis `gamme_negatifs`), marges < -100%, dormants (`couv=999`, depuis la série).
-6. Terminer par : `📈 Dashboard : https://lololo.hypeer.cloud/story/dashboard/mix2?jour=<jour>&rayon=<rayon>`
+6. Terminer par : `📈 Dashboard : https://gestion.hypeer.cloud/story/dashboard/mix2?jour=<jour>&rayon=<rayon>`
 
 ## Règles
 
