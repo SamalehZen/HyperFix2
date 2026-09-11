@@ -27,7 +27,7 @@ services:
         # Résolution locale du domaine → Caddy de l'hôte (bypass Cloudflare pour
         # le client MCP du backend ; les requêtes navigateur passent par CF normalement)
         extra_hosts:
-            - 'lololo.hypeer.cloud:host-gateway'
+            - 'gestion.hypeer.cloud:host-gateway'
         ports:
             - '127.0.0.1:${SERVER_PORT:-5005}:${SERVER_PORT:-5005}'
         environment:
@@ -37,7 +37,7 @@ services:
             # Audience OAuth supplémentaire : le moteur gamme-engine (patch validAudiences).
             # Attention : correspondance EXACTE avec le resource du PRM (trailing slash inclus).
             # URL publique (via Caddy) pour que le flux OAuth navigateur fonctionne.
-            GAMME_ENGINE_MCP_URL: https://lololo.hypeer.cloud/mcp
+            GAMME_ENGINE_MCP_URL: https://gestion.hypeer.cloud/mcp
             # Clés des fournisseurs LLM (relues depuis la config du projet via {{ env(...) }})
             OPENCODE_BASE_URL: ${OPENCODE_BASE_URL}
             OPENCODE_API_KEY: ${OPENCODE_API_KEY}
@@ -50,6 +50,9 @@ services:
             # Provider B.AI (provider par défaut) — modèle glm-5.3-flash
             B_AI_BASE_URL: ${B_AI_BASE_URL}
             B_AI_API_KEY: ${B_AI_API_KEY}
+            # Provider ExperientialLabs (défaut partout 09/2026 : luna + repli deepseek)
+            EXPERIENTIAL_BASE_URL: ${EXPERIENTIAL_BASE_URL:-https://api.experientiallabs.ai/v1}
+            EXPERIENTIAL_API_KEY: ${EXPERIENTIAL_API_KEY}
             GEMINI_API_KEY: ${GEMINI_API_KEY}
             # Bot Telegram (webhook) — config en base de données (project.telegram_settings)
             TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
@@ -88,16 +91,13 @@ services:
             - 'host.docker.internal:host-gateway'
         depends_on:
             - nao
-        networks:
-            default: {}
-            hyperfix: null
         restart: unless-stopped
 
     gamme-engine:
         build: ../gamme-engine
         container_name: gamme_engine
         extra_hosts:
-            - 'lololo.hypeer.cloud:host-gateway'
+            - 'gestion.hypeer.cloud:host-gateway'
         ports:
             - '127.0.0.1:8010:8010'
         environment:
@@ -105,9 +105,16 @@ services:
             OPENCODE_API_KEY: ${OPENCODE_ZEN_API_KEY}
             NAO_AUTH_ISSUER: ${BETTER_AUTH_URL}
             # Resource server URL publique (PRM + audience des JWT) — via Caddy
-            GAMME_MCP_URL: https://lololo.hypeer.cloud/mcp
-            GAMME_LLM_MODEL: ${GAMME_LLM_MODEL:-muse-spark-1.3-contributor-free}
+            GAMME_MCP_URL: https://gestion.hypeer.cloud/mcp
+            GAMME_LLM_MODEL: ${GAMME_LLM_MODEL:-gpt-5.6-luna}
             GAMME_MAX_LLM_ARTICLES: ${GAMME_MAX_LLM_ARTICLES:-40}
+            LIBELLER_BASE_URL: ${LIBELLER_BASE_URL:-https://api.experientiallabs.ai/v1}
+            LIBELLER_API_KEY: ${LIBELLER_API_KEY}
+            LIBELLER_MODEL: ${LIBELLER_MODEL:-gpt-5.6-luna}
+            CLASSIF_BASE_URL: ${CLASSIF_BASE_URL:-https://api.experientiallabs.ai/v1}
+            CLASSIF_API_KEY: ${CLASSIF_API_KEY}
+            CLASSIF_MODEL: ${CLASSIF_MODEL:-gpt-5.6-luna}
+            CLASSIF_MAX_LOT: ${CLASSIF_MAX_LOT:-20}
             GAMME_DATA_DIR: /storage/gamme
             NAO_PROJECT_DIR: /app/nao-project
             # Alertes Telegram (échecs d'import) — même token que le bot nao
@@ -126,11 +133,6 @@ services:
         ports:
             - '127.0.0.1:3001:3000'
         restart: unless-stopped
-
-networks:
-    hyperfix:
-        external: true
-        name: gaia-hyperfix_hyperfix_net
 
 volumes:
     nao_gamme_postgres_data:
