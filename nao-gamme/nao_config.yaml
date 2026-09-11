@@ -25,15 +25,28 @@ repos: []
 # An LLM provider edited in the app (Settings > Project > Models) is stored in the app
 # database and takes precedence over this block until it is deleted there.
 llm:
-  annotation_model: muse-spark-1.3-contributor-free
+  annotation_model: gpt-5.6-luna
   providers:
+  - provider: openaiCompatible/experiential
+    api_key: "{{ env('EXPERIENTIAL_API_KEY') }}"
+    base_url: "{{ env('EXPERIENTIAL_BASE_URL') }}"
+    models:
+    - id: gpt-5.6-luna
+      name: GPT-5.6 Luna (par défaut, gratuit)
+      default: true
+    - id: deepseek-v4-flash
+      name: DeepSeek V4 Flash (repli gratuit)
+      default: false
+    - id: deepseek-v4-flash-0731
+      name: DeepSeek V4 Flash 0731 (repli)
+      default: false
   - provider: openaiCompatible/b-ai
     api_key: "{{ env('B_AI_API_KEY') }}"
     base_url: "{{ env('B_AI_BASE_URL') }}"
     models:
     - id: glm-5.3-flash
-      name: GLM 5.3 Flash (par défaut)
-      default: true
+      name: GLM 5.3 Flash (repli)
+      default: false
     - id: glm-5.3
       name: GLM 5.3 (repli)
       default: false
@@ -82,8 +95,8 @@ llm:
     base_url: "{{ env('OPENCODE_ZEN_BASE_URL') }}"
     models:
     - id: muse-spark-1.3-contributor-free
-      name: Muse Spark 1.3 Contributor Free (par défaut)
-      default: true
+      name: Muse Spark 1.3 Contributor Free (repli)
+      default: false
     - id: muse-spark-1.2-contributor-free
       name: Muse Spark 1.2 Contributor Free (repli)
       default: false
