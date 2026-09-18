@@ -14,7 +14,8 @@ Même rythme que la gamme (quotidien + backfill des jours précédents, même jo
 ## 2. Fichier : radiographie (vérifiée par lecture le 2026-09-17)
 
 - 379 mouvements + 1 ligne TOTAL à exclure, 1 jour (13/09/2026), 356 articles.
-- 26 colonnes en 5 familles : identité (Code, Libellé, Classification `02-020-...`) ;
+- 26 colonnes en 5 familles : identité (Code, Libellé, Classification `02-020-...`
+  — piste future : filtre hiérarchique secteur/rayon/famille au dashboard) ;
   mouvement (Code/Libellé mvt, Document, Qté UC, PRMP, Valeur, Sens, Qte après,
   Date/Heure mvt/création) ; prix ×4 (PRMP doublé, Dernier PR, Dernier PAMP,
   Dernier PA) ; audit stock (Q Phys, Date/Q der. compt., Date/Q der. inv.,
@@ -46,6 +47,15 @@ Même rythme que la gamme (quotidien + backfill des jours précédents, même jo
 - **`Code mvt` toujours normalisé en TEXTE** : `"15"`, jamais `15.0` numérique
   (le parseur Excel renvoie un float — convertir `int(float(x))` puis `str` ;
   `"0.0"` → exclure comme ligne TOTAL / ligne vide).
+- **Le signe vient de la colonne `Sens`, JAMAIS du type** : `quantite_signee`
+  = `+quantite` si `Sens='+'`, `-quantite` si `Sens='-'` (preuve : RM sens `-`).
+  Ne jamais déduire le sens depuis `Code mvt`.
+- **Référence temporelle = `Date/Heure mvt`** : `Date/Heure création` peut
+  différer (batchs postés en bloc, ex. SM à 23:59:50) — tri et chaînage
+  toujours sur l'heure mvt.
+- **Gardes rayon obligatoires** : les mouvements sont soumis aux mêmes standards
+  que la gamme (`_guard_rayon`, vues pré-filtrées jour+rayon, blocage
+  `main.*`) — à prévoir dans chaque endpoint/requête du lot 4.
 
 ## 3. Preuves (toutes vérifiées)
 
@@ -56,6 +66,9 @@ Même rythme que la gamme (quotidien + backfill des jours précédents, même jo
 - 15218 (promo 10/09→15/09, vente 1850, promo 1600) le 13/09 : SM 18 pcs,
   Valeur = 18 × 1075,183 (PRMP = coût, PAS le CA) ; stock 3559−18 = 3541 ✅ ;
   CA reconstruit = 18 × 1600 = 28 800 FDJ, marge encaissée = 9 446 FDJ.
+- Journée 13/09 reconstruite (vérifiée) : **CA 1 670 520 FDJ**, coût
+  1 135 934, **marge encaissée 534 586** ; cessions (Cafet) 52 827 ;
+  retours fournisseur 4 287. Top vente : 12982 (337 pcs).
 
 ## 4. Règles métier actées (utilisateur, 2026-09-17)
 
@@ -63,7 +76,9 @@ Même rythme que la gamme (quotidien + backfill des jours précédents, même jo
    DANS le fichier ; appariement même jour gamme/mouvements.
 2. RM = retour fournisseur. Pas de retour client (n'existe pas).
 3. Codes cession OUVERTS (liste à venir) : `15` = tout ce que la Cafet prend ;
-   `10` = périmé invendable ; casse = numéro à venir. Inconnu → signalé, jamais inventé.
+   `10` = périmé invendable ; casse = numéro à venir. **Destination lue dans
+   le libellé** (`Cession Cafet`, ...) — d'autres libellés possibles les autres
+   jours, à classer avec la liste. Inconnu → signalé, jamais inventé.
 4. Doc `92` = n° d'inventaire arrêté/généré (traçabilité simple).
 5. SM = ventes uniquement (pas de casse/périmés dedans).
 6. CA : « tout au prix promo pendant la période » = OUI confirmé.
@@ -81,9 +96,10 @@ Démarque connue = périmé + retours + SI ; inconnue = écarts inventaire.
 
 ## 5bis. Schéma détaillé (décision 2026-09-18 : UNE seule table)
 
-Retenue : **une seule table `mouvements`** (400 lignes/jour — 3 tables
-`mouvements` + `prix_achats` + `inventaires` seraient du sur-découpage ;
-réévaluable si on dépasse 1 M lignes/an).
+Retenu : **une seule table `mouvements`** (400 lignes/jour — 3 tables
+(`mouvements` + `prix_achats` + `inventaires`) seraient du sur-découpage ;
+~150 k lignes/an : les 3 index suffisent ; réévaluable si on dépasse
+1 M lignes/an).
 
 ```sql
 CREATE TABLE mouvements (
@@ -127,7 +143,10 @@ CREATE INDEX idx_mouvements_code_mvt ON mouvements(code_mvt, jour);
    → module `mouvements.py` dédié (feuille `sheet1`) → validation
    (26 colonnes, TOTAL exclu, 100 % codes matchés, doublons jour/hash rejetés,
    ligne sans date rejetée proprement, types inconnus signalés) → table
-   `mouvements` + config + rapport honnête.
+   `mouvements` + config + rapport honnête. Parité gamme : archive des
+   originaux (`imports/<rayon>/AAAA/MM/JJ/`), alertes Telegram (refus/erreurs),
+   script `import_mouvements.sh` miroir, routage transparent via
+   `gamme_import_file` (même outil chat, routage par nom de fichier).
 2. **Backfill** : anciens fichiers, ordre chrono, réconciliation/jour.
    Pour des dormants **prouvés** complets, viser ~90 jours d'historique
    mouvements (voir §6bis — en attendant, niveaux « estimé »/« partiel »).
@@ -204,3 +223,6 @@ récemment) et **dormants cachés** (`couv<999` mais 0 vente depuis 3 mois).
    version) ? Un fichier peut-il contenir plusieurs dates ?
 3. Dashboard : nouvel onglet « Mouvements » dans mix2, ou 8 panneaux mélangés
    aux panneaux existants ?
+4. Multi-rayons : chaque rayon a-t-il son propre fichier mouvements ? Si oui,
+   comment rattacher le fichier au rayon (préfixe `Classification 02-...`,
+   nom de fichier, sous-dossier de dépôt) ? Périmètre initial = frais-surgele.
