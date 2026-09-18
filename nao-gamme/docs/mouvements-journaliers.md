@@ -357,3 +357,12 @@ récemment) et **dormants cachés** (`couv<999` mais 0 vente depuis 3 mois).
 - **Fichiers backfill reçus et analysés** (sans modification) : 43 jours
   consécutifs 30/07→10/09 (15 685 lignes, 16 codes observés) + 11/09
   (434 lignes) → fenêtre max 44 j (trou 12/09), dormants partiels au mieux.
+- **Backfill exécuté 2026-09-18** : 45 jours (30/07→11/09 + 13/09),
+  16 498 lignes, 100 % `ok`, dépôt vide. CA cumulé 58,6 M FDJ.
+  Dormants (fenêtre 44 j au 10/09) : 0 prouvés / 497 partiels-43 j /
+  276 estimés / **50 faux dormants exposés**. 554 `ecart_mouvement` (+134
+  `nouvel_article`) : concentrés en patterns (livraisons du matin à cheval
+  sur le snapshot 9h-10h — ex. 13267/154289/128427 ; récurrents 154289,
+  128427, 54875×3, 108225 fractionnaire) → **valide le mécanisme minuit**,
+  ce sont des effets système à investiguer, pas des pertes prouvées.
+  12/09 manquant (fenêtre coupée) + 57 écarts taggés chevauchement.
