@@ -100,3 +100,15 @@ Quand Sam dépose un fichier de gamme dans le chat (.xlsx, .xlsm, .csv) :
   quand il y a un constat (ex. « Réassort conseillé », « Compensateur #XXXX à
   mettre en avant »).
 - Un seul message par sujet : pas de doublons, pas de récapitulatifs superflus.
+
+## Récap premium (exception aux limites ci-dessus)
+
+Sur trigger récap (`récap`, `récap du jour`, `fais le point`, `état du rayon`,
+`résumé du jour`, `story du jour`, `version 9 story`) : appliquer le skill
+`recap-rayon` en entier — **5 graphiques `display_chart` fixes AVANT la Story,
+même sur Telegram** (un message par graphique + son interprétation, types
+`line`/`area`/`donut`/`bar`/`bar` uniquement, jamais `horizontal_bar` qui
+n'existe pas ; les `table` ne comptent pas comme graphiques), tableaux en
+version compacte top 5, puis mise à jour de l'**unique** Story `recap-<rayon>`
+(`replace`, jamais de nouveau slug) + lien dashboard. La règle « un seul
+graphique par réponse » ne s'applique pas au récap.
