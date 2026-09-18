@@ -16,6 +16,35 @@ FORBIDDEN = re.compile(
     re.IGNORECASE,
 )
 
+# Référence explicite contournant la vue pré-filtrée (voit tous jours/rayons).
+MAIN_SCHEMA_BYPASS = re.compile(r"\bmain\s*\.\s*article_history\b", re.IGNORECASE)
+
+
+def _strip_literals(sql: str) -> str:
+    """Retire les littéraux '...' (avec '' échappé) et "..." pour que les
+    contrôles (FORBIDDEN, bypass) ne se déclenchent pas sur du texte libre
+    comme LIKE '%IMPORT%'."""
+    out = []
+    i, n = 0, len(sql)
+    while i < n:
+        char = sql[i]
+        if char in ("'", '"'):
+            quote = char
+            i += 1
+            while i < n:
+                if sql[i] == quote:
+                    if i + 1 < n and sql[i + 1] == quote:
+                        i += 2
+                        continue
+                    i += 1
+                    break
+                i += 1
+            out.append(' ')
+        else:
+            out.append(char)
+            i += 1
+    return ''.join(out)
+
 READ_ONLY_START = re.compile(r"^\s*(SELECT|WITH)\b", re.IGNORECASE)
 
 # Valeurs non sérialisables (dates DuckDB, Decimal...) -> str
