@@ -367,6 +367,15 @@ récemment) et **dormants cachés** (`couv<999` mais 0 vente depuis 3 mois).
   128427, 54875×3, 108225 fractionnaire) → **valide le mécanisme minuit**,
   ce sont des effets système à investiguer, pas des pertes prouvées.
   12/09 manquant (fenêtre coupée) + 57 écarts taggés chevauchement.
+- **Phase D exécutée** : endpoint `GET /story-data/mouvements/{jour}`
+  (+ `/jours`, résumé J + prev + série 44 j + alertes à seuils + familles +
+  écarts, 404 honnête) ; onglet « Mouvements » (`page.tsx`, `GammeDashboard`
+  intact) avec 8 panneaux adaptés d'un template MIT
+  (arhamkhnz/next-shadcn-admin-dashboard — patterns KPI-strip, courbe
+  connectNulls, top-produits, donut, barres empilées, table TanStack,
+  compteurs, alertes) ; vérifié live (CA 10/09, série 43 j, UI 200).
+  Deltas J/J-1 inclus ; seuils alertes : écart 50 pcs/10 000 FDJ,
+  cession 20 000 FDJ, périmé > 0 (modifiables, `story_api.py`).
 - **Refresh post-backfill (13/09)** : résumé recalculé avec le code final
   (fenêtre [13/09], trou 12/09) → dormants 0/460/316 **devenus 0/508/268 +
   48 faux dormants** (articles `couv=999` vendus pendant le backfill —
