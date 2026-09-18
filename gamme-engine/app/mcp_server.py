@@ -156,27 +156,9 @@ def _import_en_cours(rayon: str) -> bool:
 def _import_mouvements_async(local: str, rayon: str) -> str:
     """Import d'un fichier de mouvements en arrière-plan (même vocabulaire
     de statuts que la gamme : demarre/deja_importe/refuse/occupe)."""
-    h = db.sha256_file(local)
-    with db.lock_conn() as conn:
-        info = db.mouvement_import_by_hash(conn, h, rayon)
-        if info is not None:
-            iid, statut, resume_json = info
-            if statut == "erreur":
-                msg_row = conn.execute(
-                    "SELECT message FROM mouvement_imports WHERE id = ?", (iid,)
-                ).fetchone()
-                return json.dumps(
-                    {"statut": "refuse", "erreur": f"Fichier déjà refusé lors d'un passage précédent : {msg_row['message'] or 'raison inconnue'}"},
-                    ensure_ascii=False,
-                )
-            if statut == "ok" and resume_json:
-                resume = json.loads(resume_json)
-                resume["deja_importe"] = True
-                return json.dumps(
-                    {"statut": "deja_importe", "jour": resume.get("jour"), "resume": resume},
-                    ensure_ascii=False,
-                )
-
+    # Pas de dédoublonnage par hash ici (un fichier multi-jours couvre N jours) :
+    # l'import décide jour par jour et le redépôt exact converge vers
+    # "jours déjà importés" sans doublons.
     if _import_en_cours(rayon):
         return json.dumps(
             {"statut": "occupe", "message": "Un import est déjà en cours pour ce rayon. Attends ~60 s puis vérifie avec gamme_imports."},

@@ -153,27 +153,29 @@ def process_file(path, rayon):
 
 
 def process_mouvement_file(path, rayon):
-    """Miroir de process_file pour les mouvements (flux séparé, table dédiée)."""
+    """Miroir de process_file pour les mouvements (flux séparé, table dédiée).
+    Pas de pré-contrôle par hash (un fichier multi-jours couvre N jours) :
+    l'import décide jour par jour (ok / déjà importé / erreur)."""
     filename = os.path.basename(path)
-    h = db.sha256_file(path)
-    with db.lock_conn() as conn:
-        info = db.mouvement_import_by_hash(conn, h, rayon)
-        if info is not None:
-            _, statut, _ = info
-            if statut == "erreur":
-                _move_to_erreurs(path, rayon, filename, "déjà refusé (hash connu en erreur)")
-                return
-            os.remove(path)
-            print(f"[watcher-mouvements] {filename} déjà importé, retiré du dépôt.")
-            return
     if path in PROCESSING:
         return
     PROCESSING.add(path)
     try:
         res = mouvements.run_mouvement_import(path, rayon=rayon)
         if res.get("ok"):
-            print(f"[watcher-mouvements] ✓ Import réussi {filename}: {json.dumps(res['resume'], ensure_ascii=False)}")
-            os.remove(path)
+            resume = res["resume"]
+            if resume.get("jours_erreur"):
+                detail = ", ".join(f"{j} ({e})" for j, e in resume["jours_erreur"].items())
+                print(f"[watcher-mouvements] ◐ Import partiel {filename}: {detail}")
+                _move_to_erreurs(path, rayon, filename, f"jours en erreur : {detail}")
+                alerts.send_telegram(
+                    f"⚠️ Import mouvements partiel ({rayon}) — {filename}\n"
+                    f"Importés : {resume.get('jours_importes')}\nDéjà : {resume.get('jours_deja')}\n"
+                    f"Erreurs : {detail}\nFichier déplacé vers depot/{rayon}/erreurs/."
+                )
+            else:
+                print(f"[watcher-mouvements] ✓ Import réussi {filename}: {json.dumps(resume, ensure_ascii=False)[:300]}")
+                os.remove(path)
         else:
             err = res.get("erreur") or "raison inconnue"
             print(f"[watcher-mouvements] ✗ Import refusé {filename}: {err}")
