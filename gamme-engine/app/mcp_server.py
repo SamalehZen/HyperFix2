@@ -821,6 +821,9 @@ def gamme_serie(rayon: str, jusqu_a: str = "") -> str:
     ({marge_negative, promo_active, chute_forte, hausse_forte}), en_stock,
     stock_bas (couv <= 7 j), dormants (couv = 999 & stock > 0),
     corriges_sous_7j (% des épisodes corrigés en <= 7 jours, glissant 90 j).
+    La réponse inclut aussi `jours_manquants` (jours calendaires sans import) :
+    la continuité apparente peut sauter des jours réels, et jours_consecutifs
+    compte des imports consécutifs — le signaler si pertinent.
     Exemples :
       {"jour": "2026-08-18", "negatifs": 12, "nouveaux": 3, "persistants": 9,
        "corriges": 4, "critiques": 2, "prmp_negatif": 41445.0, "prmp_corrige": 0.0,
@@ -949,8 +952,28 @@ def gamme_serie(rayon: str, jusqu_a: str = "") -> str:
             d["prmp_corrige"] = round(d["prmp_corrige"], 2)
             d["corriges_sous_7j"] = _corr_pct(d["jour"])
 
+        # Jours calendaires sans import : la série a des trous, et
+        # jours_consecutifs compte des imports consécutifs (pas des jours).
+        # Le modèle doit le savoir pour ne pas inventer de continuité.
+        jours_manquants = []
+        try:
+            from datetime import date as _date, timedelta as _td
+            have = {r["jour"] for r in
+                    conn.execute("SELECT DISTINCT jour FROM imports WHERE rayon = ? AND statut != 'erreur'", (rayon,)).fetchall()
+                    if r["jour"]}
+            if have:
+                day, last = _date.fromisoformat(min(have)), _date.fromisoformat(max(have))
+                while day <= last:
+                    iso = day.strftime("%Y-%m-%d")
+                    if iso not in have:
+                        jours_manquants.append(iso)
+                    day += _td(days=1)
+        except Exception:
+            jours_manquants = []
+
     return json.dumps(
-        {"success": True, "rayon": rayon, "nb_jours": len(out), "serie": out},
+        {"success": True, "rayon": rayon, "nb_jours": len(out),
+         "jours_manquants": jours_manquants, "serie": out},
         ensure_ascii=False,
     )
 
