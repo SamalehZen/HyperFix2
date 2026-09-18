@@ -465,6 +465,70 @@ def _jour_suivant(jour):
     return (datetime(y, mo, d) + timedelta(days=1)).strftime("%Y-%m-%d")
 
 
+def _familles_mouvements(conn, rayon, jour):
+    """Totaux par famille (quantités + valeurs + top codes) pour le panneau."""
+    out = {}
+    for r in conn.execute(
+            "SELECT type_normalise, COUNT(*) AS n, COALESCE(SUM(quantite_signee), 0) AS qte, "
+            "COALESCE(SUM(valeur_fichier), 0) AS v FROM mouvements "
+            "WHERE rayon = ? AND jour = ? GROUP BY type_normalise",
+            (rayon, jour)).fetchall():
+        top = conn.execute(
+            "SELECT code, MAX(libelle) AS libelle, COALESCE(SUM(valeur_fichier), 0) AS v "
+            "FROM mouvements WHERE rayon = ? AND jour = ? AND type_normalise = ? "
+            "GROUP BY code ORDER BY v DESC LIMIT 3",
+            (rayon, jour, r["type_normalise"])).fetchall()
+        out[r["type_normalise"]] = {
+            "lignes": r["n"], "qte": round(r["qte"] or 0, 2), "valeur": round(r["v"] or 0, 2),
+            "top": [{"code": t["code"], "libelle": t["libelle"], "valeur": round(t["v"] or 0, 2)}
+                    for t in top],
+        }
+    return out
+
+
+def _ecarts_mouvements(conn, rayon, jour):
+    """Détail des écarts du jour (anomalies rattachées à l'import J+1)."""
+    imp_j1 = db.get_gamme_import_for_jour(conn, rayon, _jour_suivant(jour))
+    if imp_j1 is None:
+        return []
+    out = []
+    for a in conn.execute(
+            "SELECT a.code, a.type, a.description, h.libelle, h.px_revient FROM anomalies a "
+            "LEFT JOIN article_history h ON h.import_id = a.import_id AND h.code = a.code "
+            "WHERE a.import_id = ? AND a.type IN ('ecart_mouvement', 'nouvel_article') "
+            "ORDER BY a.id LIMIT 100", (imp_j1,)).fetchall():
+        qte, valeur = None, None
+        if a["type"] == "ecart_mouvement":
+            m = re.search(r"(-?\d+(?:[.,]\d+)?)", a["description"] or "")
+            if m:
+                try:
+                    qte = abs(float(m.group(1).replace(",", ".")))
+                    valeur = round(qte * (a["px_revient"] or 0), 2)
+                except ValueError:
+                    qte = None
+        out.append({"code": a["code"], "type": a["type"], "libelle": a["libelle"],
+                    "qte": qte, "valeur": valeur,
+                    "chevauchement": "chevauchement" in (a["description"] or ""),
+                    "description": (a["description"] or "")[:200]})
+    return out
+
+
+@router.get("/mouvements/jours")
+def story_mouvements_jours(rayon: str = config.RAYON):
+    """Jours avec mouvements importés (navigation de l'onglet Mouvements)."""
+    if rayon not in config.rayon_ids():
+        return JSONResponse({"ok": False, "erreur": f"Rayon inconnu : {rayon}"}, status_code=404)
+    with db.lock_conn() as conn:
+        rows = conn.execute(
+            "SELECT jour, nb_mouvements FROM mouvement_imports "
+            "WHERE rayon = ? AND statut = 'ok' ORDER BY jour DESC LIMIT 90",
+            (rayon,)).fetchall()
+    return JSONResponse({
+        "ok": True, "rayon": rayon,
+        "jours": [{"jour": r["jour"], "nb_mouvements": r["nb_mouvements"]} for r in rows],
+    })
+
+
 @router.get("/mouvements/{jour}")
 def story_mouvements(jour: str, rayon: str = config.RAYON):
     """Payload de l'onglet Mouvements : résumé du jour (stocké à l'import),
@@ -507,9 +571,13 @@ def story_mouvements(jour: str, rayon: str = config.RAYON):
                           "articles": ind.get("nb_articles_vendus", 0)})
         serie.reverse()
         alertes = _alertes_mouvements(conn, rayon, jour, resume)
+        familles = _familles_mouvements(conn, rayon, jour)
+        ecarts = _ecarts_mouvements(conn, rayon, jour)
     return JSONResponse({
         "ok": True, "rayon": rayon, "jour": jour,
         "libelle_rayon": config.rayon_libelle(rayon),
         "resume": resume, "prev_jour": prev_jour, "prev_resume": prev_resume,
         "serie": serie, "alertes": alertes,
+        "familles": familles,
+        "ecarts": ecarts,
     })

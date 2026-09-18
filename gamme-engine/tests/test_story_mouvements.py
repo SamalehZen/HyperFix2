@@ -37,6 +37,17 @@ def test_endpoint_404_sans_mouvements(fresh_db):
     assert out["ok"] is False
 
 
+def test_endpoint_jours_mouvements(fresh_db):
+    _rayons()
+    with db.lock_conn() as conn:
+        _mouvement_jour(conn, "frais-surgele", "2026-09-09", _resume_min())
+        _mouvement_jour(conn, "frais-surgele", "2026-09-10", _resume_min())
+    resp = story_api.story_mouvements_jours("frais-surgele")
+    out = json.loads(resp.body.decode("utf-8"))
+    assert out["ok"] is True
+    assert [j["jour"] for j in out["jours"]] == ["2026-09-10", "2026-09-09"]
+
+
 def test_endpoint_rayon_inconnu(fresh_db):
     _rayons()
     out = _body(story_api.story_mouvements("2026-09-10", "inconnu"))
@@ -55,6 +66,8 @@ def test_endpoint_jour_prev_serie(fresh_db):
     assert out["prev_resume"]["indicateurs"]["ca"] == 900.0
     assert [p["jour"] for p in out["serie"]] == ["2026-09-09", "2026-09-10"]
     assert out["alertes"] == []
+    assert out["familles"] == {}
+    assert out["ecarts"] == []
 
 
 def test_endpoint_alertes(fresh_db):
