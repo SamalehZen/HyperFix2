@@ -45,6 +45,28 @@ def test_validate_file_ok(tmp_path, make_df):
     assert len(out) == 2
 
 
+def test_validate_file_rejects_fractional_code(tmp_path, make_df):
+    # "12.5" tronqué en 12 par l'ancien code = fausse jointure J/J-1.
+    df = make_df([{"Code": "12.5", "Libellé": "A"}])
+    p = tmp_path / "frac.csv"
+    write_csv(p, df)
+    out, err = pipeline.validate_file(str(p))
+    assert out is None
+    assert "non entière(s)" in err
+
+
+def test_validate_file_warns_unreadable_numerics(tmp_path, make_df):
+    df = make_df([
+        {"Code": 1, "Libellé": "A", "Stock": "douze"},
+        {"Code": 2, "Libellé": "B", "Stock": 5},
+    ])
+    p = tmp_path / "warn.csv"
+    write_csv(p, df)
+    out, err = pipeline.validate_file(str(p))
+    assert err is None
+    assert any("Stock" in w for w in out.attrs.get("gamme_warnings", []))
+
+
 def _insert_import(conn, rayon, jour, fichier, h):
     return db.create_import(conn, rayon, jour, fichier, h, "ok", nb_articles=0)
 
