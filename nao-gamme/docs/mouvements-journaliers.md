@@ -1,7 +1,11 @@
 # Mouvements journaliers — contexte complet + plan HyperFix2 V2
 
 Date : 2026-09-18. Statut : SPÉC FIGÉE (mapping 58 codes verrouillé, point 6
-dormants prouvés) — exécution en attente (« go mouvements »).
+dormants prouvés) — exécution phasée : **A+B+C autorisés (lots 1+3, dashboard
+intact garanti), D+E (lots 4-5) INTERDITS jusqu'à nouvel ordre**.
+Décisions 2026-09-18 : même `depot/<rayon>/` + routage par nom ;
+table `mouvement_imports` séparée (zéro risque gamme) ;
+import réel du 13/09 en prod (copie, original `/root` intact) dès lot 1 validé.
 Fichier source : `/root/Stock_DetailMouvement (93).xlsx` (ne pas déplacer : référence d'analyse).
 Projet : `/opt/HyperFix2` (moteur `gamme-engine`, app `nao-gamme`). Base : `/storage/gamme/historique.db`.
 
@@ -163,6 +167,20 @@ CREATE INDEX idx_mouvements_code_mvt ON mouvements(code_mvt, jour);
   `stock_gamme[J] + Σ(quantite_signee[J]) = stock_gamme[J+1]`.
 - **Statut `mouvements_sans_gamme`** : si la gamme du jour manque, stocker quand
   même les mouvements mais ne pas calculer la réconciliation (reportée).
+- **Table `mouvement_imports` SÉPARÉE** (décision 2026-09-18, zéro risque gamme) :
+  ```sql
+  CREATE TABLE mouvement_imports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rayon TEXT NOT NULL, jour TEXT NOT NULL,
+    date_import TEXT NOT NULL, fichier_source TEXT NOT NULL,
+    archive_path TEXT, hash_sha256 TEXT NOT NULL,
+    nb_mouvements INTEGER NOT NULL, statut TEXT NOT NULL, message TEXT,
+    UNIQUE(rayon, jour)
+  );
+  CREATE INDEX idx_mouvement_imports_hash ON mouvement_imports(rayon, hash_sha256);
+  ```
+  Dedup par hash + unicité (rayon, jour) : un 2e fichier du même jour = refusé.
+  La table `imports` (gamme) n'est JAMAIS touchée par le flux mouvements.
 
 ## 6. Lots d'exécution
 
@@ -234,8 +252,12 @@ récemment) et **dormants cachés** (`couv<999` mais 0 vente depuis 3 mois).
 - TOTAL exclu (jamais compté) ; doublon jour refusé ; type inconnu signalé.
 - Dormants : `DORMANT_JOURS` défaut 90 ; niveaux `estime/partiel/prouve`
   étiquetés ; stock nul exclu ; réveil SM uniquement.
+- Import réel : copie du 13/09 en prod (original `/root` intact) dès lot 1
+  validé ; chiffres vérifiés contre §3 avant de continuer.
 - Équation équilibrée sur fichier test ; suite pytest complète verte ;
   rebuild + moteur healthy.
+- Rollback : tout est additif (nouveau module + nouvelles tables, flux gamme
+  intact) → revert des commits suffit, aucune migration destructive.
 
 ## 8. En attente (non bloquant)
 
@@ -247,8 +269,10 @@ récemment) et **dormants cachés** (`couv<999` mais 0 vente depuis 3 mois).
 
 ## 9. Questions ouvertes (mapping : tout résolu 2026-09-18 — OF/OG/OH/OX/OJ/ET/ST/25/26/36 inutilisés, 35=cession repas, 40/45=cessions, transfert supprimé, OX=coquille sans impact)
 
-1. Dépôt des mouvements : même dossier `depot/<rayon>/` avec routage par nom,
-   ou nouveau sous-dossier `depot/<rayon>/mouvements/` ?
+1. Dépôt des mouvements : ~~même dossier `depot/<rayon>/` avec routage par nom,
+   ou nouveau sous-dossier `depot/<rayon>/mouvements/` ?~~ → **RÉSOLU
+   2026-09-18 : même `depot/<rayon>/` + routage par nom
+   `Stock_DetailMouvement*.xlsx`.**
 2. Que signifie `(93)` dans `Stock_DetailMouvement (93).xlsx` (n° pièce, jour,
    version) ? Un fichier peut-il contenir plusieurs dates ?
 3. Dashboard : nouvel onglet « Mouvements » dans mix2, ou 8 panneaux mélangés
