@@ -113,7 +113,8 @@ def _move_to_erreurs(path, rayon, filename, reason):
 
 def process_file(path, rayon):
     filename = os.path.basename(path)
-    h = db.sha256_file(path)    with db.lock_conn() as conn:
+    h = db.sha256_file(path)
+    with db.lock_conn() as conn:
         info = db.import_statut_for_hash(conn, h, rayon)
         if info is not None:
             import_id, statut, has_rapport = info
