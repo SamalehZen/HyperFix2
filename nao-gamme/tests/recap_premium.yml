@@ -1,0 +1,22 @@
+name: recap_premium
+prompt: "récap du jour : donne le récap premium complet (5 graphiques fixes avec interprétation) puis mets à jour l'unique Story à 5 onglets."
+sql: |
+  SELECT 'recap_premium_check' AS check_name
+expect:
+  min_charts: 5
+  chart_types:
+    - "line"
+    - "area"
+    - "donut"
+    - "bar"
+    - "bar"
+  forbidden_chart_types:
+    - "horizontal_bar"
+  story_slug: "recap-<rayon>"
+  story_action_on_exists: "replace"
+  story_tabs:
+    - "🎯 Dashboard"
+    - "🚨 Alertes & ruptures"
+    - "💰 Marges & capital"
+    - "🛠️ Plan d'action 48 h"
+    - "📊 Lecture direction"
