@@ -487,13 +487,30 @@ def detect_anomalies(conn, import_id, rayon, jour, compared):
 def rebuild_duckdb(df, rayon=None):
     import duckdb
 
+    rayon = rayon or config.RAYON
     path = os.path.join(config.NAO_PROJECT_DIR, "gamme.duckdb")
     tmp = path + ".tmp"
     if os.path.exists(tmp):
         os.remove(tmp)
     con = duckdb.connect(tmp)
     con.register("t", df)
-    con.execute("CREATE TABLE gamme_commande AS SELECT *, ? AS rayon FROM t", [rayon or config.RAYON])
+    con.execute("CREATE TABLE gamme_commande AS SELECT *, ? AS rayon FROM t", [rayon])
+    # Préserve les snapshots des autres rayons déjà présents (sinon chaque
+    # import effacerait les autres rayons de gamme.duckdb).
+    try:
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            con.execute(f"ATTACH '{path}' AS old (READ_ONLY)")
+
+            def _cols(q):
+                return [r[1] for r in con.execute(f"PRAGMA table_info({q})").fetchall()]
+
+            old_cols = _cols("old.gamme_commande")
+            new_cols = _cols("gamme_commande")
+            if "rayon" in old_cols and old_cols == new_cols:
+                con.execute("INSERT INTO gamme_commande SELECT * FROM old.gamme_commande WHERE rayon != ?", [rayon])
+            con.execute("DETACH old")
+    except Exception as e:
+        print(f"[pipeline] note duckdb multi-rayons ignorée : {e}")
     con.close()
     os.replace(tmp, path)
     return path
