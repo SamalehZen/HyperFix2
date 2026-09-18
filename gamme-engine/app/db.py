@@ -362,18 +362,21 @@ def set_mouvement_import_statut(conn, import_id, statut, message=None, resume=No
         )
 
 
+_MOUVEMENT_COLS = (
+    "import_id, jour, rayon, code, libelle, classification, code_mvt, libelle_mvt, "
+    "type_normalise, sous_type, document, quantite, sens, quantite_signee, prmp, "
+    "valeur_fichier, stock_apres, heure_mvt, heure_creation, dernier_pr, dernier_pamp, "
+    "dernier_pa, stock_physique, date_dernier_comptage, qte_dernier_comptage, "
+    "date_dernier_inv, qte_dernier_inv, date_derniere_entree, date_derniere_sortie, "
+    "fichier_source, hash_sha256"
+)
+
+
 def insert_mouvements(conn, import_id, rayon, jour, rows):
-    conn.executemany(
-        "INSERT INTO mouvements "
-        "(import_id, jour, rayon, code, libelle, classification, code_mvt, libelle_mvt, "
-        "type_normalise, sous_type, document, quantite, sens, quantite_signee, prmp, "
-        "valeur_fichier, stock_apres, heure_mvt, heure_creation, dernier_pr, dernier_pamp, "
-        "dernier_pa, stock_physique, date_dernier_comptage, qte_dernier_comptage, "
-        "date_dernier_inv, qte_dernier_inv, date_derniere_entree, date_derniere_sortie, "
-        "fichier_source, hash_sha256) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        rows,
-    )
+    ph = ",".join("?" * len(_MOUVEMENT_COLS.split(",")))
+    for r in rows:
+        assert len(r) == len(_MOUVEMENT_COLS.split(",")), f"ligne {len(r)} valeurs, {len(_MOUVEMENT_COLS.split(','))} colonnes"
+    conn.executemany(f"INSERT INTO mouvements ({_MOUVEMENT_COLS}) VALUES ({ph})", rows)
 
 
 def get_gamme_import_for_jour(conn, rayon, jour):
