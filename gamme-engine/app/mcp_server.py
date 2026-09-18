@@ -628,6 +628,9 @@ def gamme_query(sql: str, rayon: str) -> str:
     les valeurs numériques sont stockées en texte → caster pour calculer
     (CAST("Marge %" AS DOUBLE)) ; les prix sont en francs djiboutiens (FDJ) — ne jamais
     diviser ; `SA`/`SF` sont des codes lettrés.
+    Réponse : {"success","columns","rows","rowCount","total","tronque"} — si
+    tronque=true, la liste est coupée à 500 lignes : annonce le total et ne
+    présente JAMAIS la liste partielle comme complète.
     Exemple : SELECT "Code", "Libellé", "Marge %" FROM gamme_commande
     WHERE "Marge %" <> '' ORDER BY CAST("Marge %" AS DOUBLE) DESC LIMIT 5."""
     _guard_rayon(rayon)
