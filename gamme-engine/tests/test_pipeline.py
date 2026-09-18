@@ -30,7 +30,7 @@ def test_validate_file_non_numeric_codes(tmp_path, make_df):
     write_csv(p, df)
     out, err = pipeline.validate_file(str(p))
     assert out is None
-    assert "non numériques" in err
+    assert "non entière(s)" in err
 
 
 def test_validate_file_ok(tmp_path, make_df):
