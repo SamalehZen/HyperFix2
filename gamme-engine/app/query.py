@@ -75,7 +75,12 @@ def run_query(sql: str, rayon: str) -> str:
             {"success": False, "erreur": "Seules les requêtes SELECT/WITH en lecture seule sont autorisées."},
             ensure_ascii=False,
         )
-    if FORBIDDEN.search(sql):
+    if MAIN_SCHEMA_BYPASS.search(sql):
+        return json.dumps(
+            {"success": False, "erreur": "Référence interdite : main.article_history contourne le filtre jour/rayon. Interrogez article_history directement."},
+            ensure_ascii=False,
+        )
+    if FORBIDDEN.search(_strip_literals(sql)):
         return json.dumps(
             {"success": False, "erreur": "Requête refusée : opérations d'écriture, DDL ou fonctions de fichiers interdites."},
             ensure_ascii=False,
@@ -102,6 +107,8 @@ def run_query(sql: str, rayon: str) -> str:
             wrapped = f"SELECT * FROM (\n{sql}\n) AS _gamme_query LIMIT {MAX_ROWS}"
             rows = con.execute(wrapped).fetchall()
             cols = [d[0] for d in con.description] if con.description else []
+            # Total réel : le modèle doit savoir quand la liste est tronquée.
+            total = con.execute(f"SELECT COUNT(*) FROM (\n{sql}\n) AS _gamme_count").fetchone()[0]
         finally:
             con.close()
     except duckdb.Error as e:
@@ -117,7 +124,8 @@ def run_query(sql: str, rayon: str) -> str:
 
     data = [[_clean(v) for v in row] for row in rows]
     return json.dumps(
-        {"success": True, "columns": cols, "rows": data, "rowCount": len(data)},
+        {"success": True, "columns": cols, "rows": data, "rowCount": len(data),
+         "total": total, "tronque": len(data) < total},
         ensure_ascii=False,
     )
 
