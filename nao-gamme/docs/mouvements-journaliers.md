@@ -1,7 +1,7 @@
 # Mouvements journaliers — contexte complet + plan HyperFix2 V2
 
-Date : 2026-09-18. Statut : SPÉC ENRICHIE (conflit watcher, schéma, dashboard,
-point 6 dormants prouvés) — exécution en attente (« go mouvements »).
+Date : 2026-09-18. Statut : SPÉC FIGÉE (mapping 58 codes verrouillé, point 6
+dormants prouvés) — exécution en attente (« go mouvements »).
 Fichier source : `/root/Stock_DetailMouvement (93).xlsx` (ne pas déplacer : référence d'analyse).
 Projet : `/opt/HyperFix2` (moteur `gamme-engine`, app `nao-gamme`). Base : `/storage/gamme/historique.db`.
 
@@ -75,10 +75,10 @@ Même rythme que la gamme (quotidien + backfill des jours précédents, même jo
 1. Quotidien comme la gamme + backfill (anciens fichiers à venir) ; date lue
    DANS le fichier ; appariement même jour gamme/mouvements.
 2. RM = retour fournisseur. Pas de retour client (n'existe pas).
-3. Codes cession OUVERTS (liste à venir) : `15` = tout ce que la Cafet prend ;
-   `10` = périmé invendable ; casse = numéro à venir. **Destination lue dans
-   le libellé** (`Cession Cafet`, ...) — d'autres libellés possibles les autres
-   jours, à classer avec la liste. Inconnu → signalé, jamais inventé.
+3. Codes mouvement : liste COMPLÈTE reçue (58 codes, voir §5ter — mapping figé).
+   Inutilisés : OF, OG, OH, OX, OJ, ET, ST, 25, 26, 36 (famille `inutilise` :
+   apparition = alerte, jamais de traitement silencieux). Destination des
+   cessions lue dans le libellé. Inconnu hors liste → signalé, jamais inventé.
 4. Doc `92` = n° d'inventaire arrêté/généré (traçabilité simple).
 5. SM = ventes uniquement (pas de casse/périmés dedans).
 6. CA : « tout au prix promo pendant la période » = OUI confirmé.
@@ -93,6 +93,36 @@ SM→vente, EM→livraison, EI/SI→inventaire, RM→retour_fournisseur,
 15→cession_cafet, 10→perime. Valorisation fichier = PRMP (coût) ;
 CA = qté SM × prix applicable (promo si dates actives sinon vente).
 Démarque connue = périmé + retours + SI ; inconnue = écarts inventaire.
+Détail complet des 58 codes : voir §5ter (mapping figé 2026-09-18).
+
+## 5ter. Mapping complet des 58 codes (liste utilisateur, figée 2026-09-18)
+
+Patterns : paires `ANNUL.` = sens opposé du code de base (11→10, 16→15,
+21→20, 26→25, 31→30, 36→35, 41→40, 46→45, 51→50, 56→55, 61→60, 66→65) ;
+le signe est TOUJOURS lu dans `Sens` (garde croisée : `ANNUL.` de sens
+non opposé = anomalie signalée, jamais bloquante).
+
+| Famille (indicateur) | Codes | Traitement |
+|---|---|---|
+| `vente` | SM | CA reconstruit (prix applicable) |
+| `livraison` | EM, EL | Entrées stock |
+| `inventaire` | EI, SI | Ajustements + écarts |
+| `retour_fournisseur` | RM | Sorties valorisées PRMP |
+| `cession` | 15, 16, 35, 40, 41, 45, 46 (sous-types `cafet/repas/rayon/frais_gx`) | Ni vente ni perte, valorisé PRMP, sortie de stock. 15=Cafet (tout ce que la Cafet prend), **35=cession repas** (repas midi salariés, comme la Cafet), 40=cession rayon, 45=frais généraux |
+| `demarque` | 10, 11 (`perime`), 20, 21 (`echantillon`), 30, 31 (`don`), 50, 51, 55, 56 (`emballage`), 60, 61 (`casse_rayon`), 65, 66 (`casse_reception`) | Démarque connue, détaillée par sous-type |
+| `ajustement` | 70 (−), 71 (+) | Écarts directs |
+| `consigne` | EC, EV, RC, SC | Circuit consigne, tracé à part |
+| `gratuit` | EG, SG | Sans CA |
+| `facturation_interne` | EF, SF | Interne, pas des ventes |
+| `client_facture` | IF, IG, IH, IJ, IR, IT, IX, OR, OT | Circuit clients facturés : tracés à part, hors CA (défaut — aucun observé au 13/09) |
+| `regul_composes` | XE, XS | Régularisations, tracées à part |
+| `inutilise` | OF, OG, OH, OX, OJ, ET, ST, 25, 26, 36 | JAMAIS traités : apparition = alerte « code réputé inutilisé » |
+| `type_inconnu` | tout code hors liste | Stocké + signalé, jamais inventé |
+
+Notes : famille `transfert` SUPPRIMÉE (tous ses codes sont inutilisés ou
+reclassés en `cession`) ; `36` inutilisé bien que `35` utilisé (enregistré tel
+quel) ; `OX` libellé « ENTRÉE... » = coquille sans impact (code inutilisé,
+sens lu dans le fichier de toute façon).
 
 ## 5bis. Schéma détaillé (décision 2026-09-18 : UNE seule table)
 
@@ -209,13 +239,13 @@ récemment) et **dormants cachés** (`couv<999` mais 0 vente depuis 3 mois).
 
 ## 8. En attente (non bloquant)
 
-- Liste des codes (cessions + casse) quand l'utilisateur l'aura.
 - Fichiers mouvements des jours précédents (backfill — ~90 jours pour des
   dormants prouvés complets ; 39 jours de gamme déjà importés au 17/09).
+  Reçus : liste complète des 58 codes ✅ ; fichier exemple 13/09 ✅.
 - Rappel : `/root/GAMME COMPLET (1).zip` + 4 xlsx = anciennes gammes déjà
   importées (pas de mouvements dedans).
 
-## 9. Questions ouvertes (posées 2026-09-18, réponses attendues avant/après « go »)
+## 9. Questions ouvertes (mapping : tout résolu 2026-09-18 — OF/OG/OH/OX/OJ/ET/ST/25/26/36 inutilisés, 35=cession repas, 40/45=cessions, transfert supprimé, OX=coquille sans impact)
 
 1. Dépôt des mouvements : même dossier `depot/<rayon>/` avec routage par nom,
    ou nouveau sous-dossier `depot/<rayon>/mouvements/` ?
