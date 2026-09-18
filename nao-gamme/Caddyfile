@@ -31,6 +31,14 @@ gestion.hypeer.cloud {
 		root * /images
 		file_server
 	}
+	handle /exports/* {
+		basicauth {
+			sam $2a$14$b2ZgCQV5hBNmGPNdJTJkxOmvwXOw4PVxBC8wBw1nMqzwW/H5L8cI2
+		}
+		uri strip_prefix /exports
+		root * /exports
+		file_server browse
+	}
 	handle /mcp* {
 		reverse_proxy gamme-engine:8010
 	}
