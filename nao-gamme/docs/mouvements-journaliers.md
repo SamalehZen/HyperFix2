@@ -58,6 +58,26 @@ Même rythme que la gamme (quotidien + backfill des jours précédents, même jo
   que la gamme (`_guard_rayon`, vues pré-filtrées jour+rayon, blocage
   `main.*`) — à prévoir dans chaque endpoint/requête du lot 4.
 
+## 2ter. Mécanisme minuit (expliqué par l'utilisateur, 2026-09-18 — grille de lecture officielle)
+
+- **SM = batch de minuit** : ventes 8h→22h accumulées, déduites du stock à
+  23:59:50. Les lignes SM datées J = les ventes de la journée J.
+- **Tout le reste = temps réel** : cessions (15/35/40/45), périmé (10),
+  emballages (50/55), retours, livraisons, inventaires — déduits à l'instant.
+- **Gamme exportée 9h-10h le matin** : « gamme du 17 » = stock après mise à jour
+  minuit 16→17 = inclut les ventes du 16. **Logique J-1 confirmée.**
+- **Conséquence 1** : SM ne chevauche jamais le snapshot → réconciliation SM
+  exacte par construction (preuves §3).
+- **Conséquence 2** : un mouvement temps réel vers 9h-10h peut tomber avant ou
+  après la photo → petits écarts ATTENDUS (ex. 18702 : RM 09:35 → +1).
+  Règle affinée : écart sur code temps réel avec `Heure mvt` 09:00-10:00 =
+  « chevauchement snapshot probable » (informatif) ; écart SM ou hors créneau
+  = vraie anomalie.
+- **Piège exports mid-journée** : un fichier « journée 15 » sorti à 11h mélange
+  SM de la veille + temps réel du matin. Nos fichiers (SM 23:59:50 présents)
+  sont des extraits fin de journée → sémantique propre par date.
+- CA (SM daté J = ventes J) et dormants (présence/absence SM) : inchangés.
+
 ## 3. Preuves (toutes vérifiées)
 
 - Réconciliation `gamme(13/09) + net mouvements = gamme(14/09)` :
@@ -110,20 +130,25 @@ non opposé = anomalie signalée, jamais bloquante).
 | `inventaire` | EI, SI | Ajustements + écarts |
 | `retour_fournisseur` | RM | Sorties valorisées PRMP |
 | `cession` | 15, 16, 35, 40, 41, 45, 46 (sous-types `cafet/repas/rayon/frais_gx`) | Ni vente ni perte, valorisé PRMP, sortie de stock. 15=Cafet (tout ce que la Cafet prend), **35=cession repas** (repas midi salariés, comme la Cafet), 40=cession rayon, 45=frais généraux |
-| `demarque` | 10, 11 (`perime`), 20, 21 (`echantillon`), 30, 31 (`don`), 50, 51, 55, 56 (`emballage`), 60, 61 (`casse_rayon`), 65, 66 (`casse_reception`) | Démarque connue, détaillée par sous-type |
+| `demarque` | 10, 11 (`perime`), 30, 31 (`don`), 50, 51, 55, 56 (`emballage`), 60, 61 (`casse_rayon`), 65, 66 (`casse_reception`) | Démarque connue, détaillée par sous-type |
 | `ajustement` | 70 (−), 71 (+) | Écarts directs |
 | `consigne` | EC, EV, RC, SC | Circuit consigne, tracé à part |
 | `gratuit` | EG, SG | Sans CA |
 | `facturation_interne` | EF, SF | Interne, pas des ventes |
 | `client_facture` | IF, IG, IH, IJ, IR, IT, IX, OR, OT | Circuit clients facturés : tracés à part, hors CA (défaut — aucun observé au 13/09) |
 | `regul_composes` | XE, XS | Régularisations, tracées à part |
-| `inutilise` | OF, OG, OH, OX, OJ, ET, ST, 25, 26, 36 | JAMAIS traités : apparition = alerte « code réputé inutilisé » |
+| `inutilise` | OF, OG, OH, OX, OJ, ET, ST, 25, 26, 36, 20, 21 | JAMAIS traités : apparition = alerte « code réputé inutilisé » |
 | `type_inconnu` | tout code hors liste | Stocké + signalé, jamais inventé |
 
 Notes : famille `transfert` SUPPRIMÉE (tous ses codes sont inutilisés ou
 reclassés en `cession`) ; `36` inutilisé bien que `35` utilisé (enregistré tel
 quel) ; `OX` libellé « ENTRÉE... » = coquille sans impact (code inutilisé,
 sens lu dans le fichier de toute façon).
+Màj 2026-09-18 : `20/21` (échantillons) → **`inutilise`** (n'existe pas,
+confirmé) ; `60/65` casse existent (futurs fichiers) ; `70/71` rares ;
+**mouvements retrouvables tout jour** (l'utilisateur peut fournir n'importe
+quelle journée) vs **gammes parfois introuvables** (trous existants) → renforce
+`mouvements_sans_gamme` + dormants indépendants de la gamme ancienne.
 
 ## 5bis. Schéma détaillé (décision 2026-09-18 : UNE seule table)
 
@@ -264,23 +289,32 @@ récemment) et **dormants cachés** (`couv<999` mais 0 vente depuis 3 mois).
 
 - Fichiers mouvements des jours précédents (backfill — ~90 jours pour des
   dormants prouvés complets ; 39 jours de gamme déjà importés au 17/09).
-  Reçus : liste complète des 58 codes ✅ ; fichier exemple 13/09 ✅.
+  Reçus : liste complète des 58 codes ✅ ; fichier exemple 13/09 ✅ (en prod) ;
+  `/root/Stock_DetailMouvement  30-08-26 AU 10-09-26.xlsx` (1,86 Mo —
+  **vérifié : 15 685 mouvements, 43 jours consécutifs 30/07→10/09, zéro trou**,
+  16 codes observés, inutilisés 0 apparition, ANNUL. opposés ✅) ;
+  `/root/Stock_DetailMouvement 11-09-26.xlsx` (60 Ko, 434 mouvements, 11/09).
+  ⚠️ Écarts à clarifier : nom trompeur (pas 30/08→10/09) + utilisateur annonce
+  « 07/08→11/09 » vs vérifié 30/07→10/09 + 11/09 → **périmètre backfill :
+  tout (30/07→) ou depuis 07/08 ? (Q5)**.
 - Rappel : `/root/GAMME COMPLET (1).zip` + 4 xlsx = anciennes gammes déjà
   importées (pas de mouvements dedans).
 
-## 9. Questions ouvertes (mapping : tout résolu 2026-09-18 — OF/OG/OH/OX/OJ/ET/ST/25/26/36 inutilisés, 35=cession repas, 40/45=cessions, transfert supprimé, OX=coquille sans impact ; dépôt : même `depot/<rayon>/` + routage par nom — RÉSOLU)
+## 9. Questions ouvertes (mapping : tout résolu — OF/OG/OH/OX/OJ/ET/ST/25/26/36/20/21 inutilisés, 35=cession repas, 40/45=cessions, transfert supprimé, OX=coquille ; dépôt RÉSOLU ; export gamme 9h-10h RÉSOLU ; multi-dates RÉSOLU : oui, 43 dates/1 fichier + split)
 
 1. Dépôt des mouvements : ~~même dossier `depot/<rayon>/` avec routage par nom,
    ou nouveau sous-dossier `depot/<rayon>/mouvements/` ?~~ → **RÉSOLU
    2026-09-18 : même `depot/<rayon>/` + routage par nom
    `Stock_DetailMouvement*.xlsx`.**
 2. Que signifie `(93)` dans `Stock_DetailMouvement (93).xlsx` (n° pièce, jour,
-   version) ? Un fichier peut-il contenir plusieurs dates ?
+   version) ?
 3. Dashboard : nouvel onglet « Mouvements » dans mix2, ou 8 panneaux mélangés
    aux panneaux existants ?
 4. Multi-rayons : chaque rayon a-t-il son propre fichier mouvements ? Si oui,
    comment rattacher le fichier au rayon (préfixe `Classification 02-...`,
    nom de fichier, sous-dossier de dépôt) ? Périmètre initial = frais-surgele.
+5. Périmètre backfill : tout le contenu vérifié (30/07→10/09 + 11/09) ou
+   restreint à 07/08→11/09 (annoncé par l'utilisateur) ?
 
 ## 10. Exécution A+B+C (2026-09-18, 10 commits)
 
@@ -312,3 +346,9 @@ récemment) et **dormants cachés** (`couv<999` mais 0 vente depuis 3 mois).
 - **Règle dormants trailing window EN ATTENTE d'implémentation** : jamais-vu +
   fenêtre 90 j complète → prouvé (« pas vu depuis le … ») ; trou = pas de
   preuve. Fix ciblé `_dormants` + 2 tests (« go fix dormants »).
+- **Mécanisme minuit documenté (§2ter)** : SM = batch 23:59:50 (ventes J),
+  autres = temps réel, gamme exportée 9h-10h → écarts temps réel 09:00-10:00 =
+  « chevauchement snapshot probable » (informatif) ; `20/21` → `inutilise`.
+- **Fichiers backfill reçus et analysés** (sans modification) : 43 jours
+  consécutifs 30/07→10/09 (15 685 lignes, 16 codes observés) + 11/09
+  (434 lignes) → fenêtre max 44 j (trou 12/09), dormants partiels au mieux.
