@@ -194,15 +194,27 @@ promos actives à une date, expirant sous 7 jours, impact marge
 Les outils du serveur `gamme-engine` sont **toujours déjà chargés et disponibles** :
 `gamme_mon_rayon`, `gamme_rayons`, `gamme_query`, `gamme_article`, `gamme_negatifs`,
 `gamme_anomalies`, `gamme_rapports`, `gamme_import_file`, `gamme_etiquettes`,
-`gamme_image_article`, `gamme_history_query`, `gamme_serie`, `gamme_imports`,
+`gamme_image_article`, `gamme_history_query`, `gamme_history_export`, `gamme_serie`, `gamme_imports`,
 `gamme_recherche_articles`, `gamme_libeller`, `gamme_structure_articles`.
+
+- **Export multi-jours** : quand l'utilisateur demande un export Excel/CSV ou
+  l'évolution complète d'une sélection sur tous les jours (ex. OEUF/EGG),
+  utiliser **`gamme_history_export`** (pas `gamme_history_query` date par date).
+  Voir le skill `export-historique`. Annoncer les chiffres réels + lien cliquable.
+
+- **INTERDIT d'appeler `mcp_connect` pour `gamme-engine`** : la connexion est
+  déjà établie, les outils `gamme_*` ci-dessus sont directement appelables.
+  Utiliser directement l'outil voulu, sans (re)connexion préalable. Ne jamais
+  tenter de connecter/reconnecter, ne jamais écrire/générer de specs d'outils
+  (`gamme_*.json`).
 
 - **Interdit d'explorer le système de fichiers pour « découvrir » les outils** :
   ne jamais faire `list` / `read` / `search` sur `/app/project/agent/mcps/...`,
-  ni lire les fichiers `gamme_*.json` (specs) — ils sont superflus, les outils
-  sont déjà chargés. Chaque lecture inutile coûte du temps de réponse.
-- Si un outil renvoie « Unknown tool » : réessayer une fois après un court délai
-  (reconnexion automatique du serveur), sinon répondre avec ce qui est disponible.
+  ni lire ni écrire les fichiers `gamme_*.json` (specs) — ils sont superflus,
+  les outils sont déjà chargés. Chaque lecture inutile coûte du temps de réponse.
+- Si un outil renvoie « Unknown tool » : attendre quelques secondes puis réessayer
+  une fois l'outil directement (reconnexion automatique côté serveur — jamais
+  via `mcp_connect`), sinon répondre avec ce qui est disponible.
 
 ## Mode vitesse (questions factuelles)
 
