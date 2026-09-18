@@ -147,7 +147,12 @@ def run_history_query(sql: str, rayon: str, jour: str) -> str:
             {"success": False, "erreur": "Seules les requêtes SELECT/WITH en lecture seule sont autorisées."},
             ensure_ascii=False,
         )
-    if FORBIDDEN.search(sql):
+    if MAIN_SCHEMA_BYPASS.search(sql):
+        return json.dumps(
+            {"success": False, "erreur": "Référence interdite : main.article_history contourne le filtre jour/rayon. Interrogez article_history directement."},
+            ensure_ascii=False,
+        )
+    if FORBIDDEN.search(_strip_literals(sql)):
         return json.dumps(
             {"success": False, "erreur": "Requête refusée : opérations d'écriture, DDL ou fonctions de fichiers interdites."},
             ensure_ascii=False,
@@ -188,6 +193,7 @@ def run_history_query(sql: str, rayon: str, jour: str) -> str:
             wrapped = f"SELECT * FROM (\n{sql}\n) AS _history_query LIMIT {MAX_ROWS}"
             cols = [d[0] for d in con.execute(wrapped).description]
             rows = con.execute(wrapped).fetchall()
+            total = con.execute(f"SELECT COUNT(*) FROM (\n{sql}\n) AS _history_count").fetchone()[0]
         finally:
             con.close()
     except sqlite3.Error as e:
@@ -203,7 +209,8 @@ def run_history_query(sql: str, rayon: str, jour: str) -> str:
 
     rows = [[_clean(v) for v in r] for r in rows]
     return json.dumps(
-        {"success": True, "jour": jour, "columns": cols, "rows": rows, "rowCount": len(rows)},
+        {"success": True, "jour": jour, "columns": cols, "rows": rows, "rowCount": len(rows),
+         "total": total, "tronque": len(rows) < total},
         ensure_ascii=False,
     )
 
