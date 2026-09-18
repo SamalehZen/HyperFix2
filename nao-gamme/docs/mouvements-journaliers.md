@@ -321,8 +321,9 @@ récemment) et **dormants cachés** (`couv<999` mais 0 vente depuis 3 mois).
 
 - **Phase A** : config (`MOUVEMENT_*`, `DORMANT_JOURS`), `types_mouvements.json`
   (58 codes), tables `mouvements`+`mouvement_imports`, module `mouvements.py`,
-  routeur watcher/API/MCP, `import_mouvements.sh`, 20 tests (synthétiques +
-  réel 13/09). Suite : **61/61** (41 baseline + 20), zéro régression.
+  routeur watcher/API/MCP, `import_mouvements.sh`, 27 tests (synthétiques +
+  réel 13/09 + split + trailing + boot). Suite : **68/68** (41 baseline + 27),
+  zéro régression.
 - **Phase B** : `reconcile_jour` + `ecart_mouvement` + couverture
   (`mouvements_sans_gamme` / `gamme_j/gamme_j1_manquante`).
 - **Phase C** : `indicateurs_jour` (CA, marge, rotation, démarque, prix Δ,
@@ -366,3 +367,8 @@ récemment) et **dormants cachés** (`couv<999` mais 0 vente depuis 3 mois).
   128427, 54875×3, 108225 fractionnaire) → **valide le mécanisme minuit**,
   ce sont des effets système à investiguer, pas des pertes prouvées.
   12/09 manquant (fenêtre coupée) + 57 écarts taggés chevauchement.
+- **Refresh post-backfill (13/09)** : résumé recalculé avec le code final
+  (fenêtre [13/09], trou 12/09) → dormants 0/460/316 **devenus 0/508/268 +
+  48 faux dormants** (articles `couv=999` vendus pendant le backfill —
+  ex. 18792 vendu le 06/09) ; écart 18702 taggé chevauchement 9h-10h.
+  Preuve que le backfill enrichit même les jours déjà importés.
