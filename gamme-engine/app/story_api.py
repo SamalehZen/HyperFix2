@@ -5,6 +5,8 @@ Endpoints publics (même modèle de confiance que les rapports statiques) :
   GET /story-data/{jour}?rayon=...       → payload complet du jour
 """
 from datetime import datetime, timedelta
+import json
+import re
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -387,3 +389,127 @@ def story_jour(jour: str, rayon: str = config.RAYON):
             {"ok": False, "erreur": f"Aucun import pour {rayon} le {jour}"}, status_code=404
         )
     return JSONResponse(data)
+
+
+# Seuils d'alertes mouvements (Q3 validée : défauts modifiables ici).
+ALERTE_ECART_QTE = 50
+ALERTE_ECART_VALEUR = 10000
+ALERTE_CESSION_VALEUR = 20000
+
+
+def _resume_mouvement(conn, rayon, jour):
+    row = conn.execute(
+        "SELECT resume_json FROM mouvement_imports WHERE rayon = ? AND jour = ? AND statut = 'ok' "
+        "ORDER BY id DESC LIMIT 1",
+        (rayon, jour),
+    ).fetchone()
+    if row is None or not row["resume_json"]:
+        return None
+    try:
+        return json.loads(row["resume_json"])
+    except ValueError:
+        return None
+
+
+def _alertes_mouvements(conn, rayon, jour, resume):
+    """Alertes du jour, calculées sur données stockées (jamais inventées).
+    Seuils : voir constantes ALERTE_* ci-dessus."""
+    alertes = []
+    ind = resume.get("indicateurs") or {}
+    if isinstance(ind, dict):
+        perime = (ind.get("demarque") or {}).get("perime") or {}
+        if (perime.get("qte") or 0) > 0:
+            alertes.append({"niveau": "attention", "titre": "Périmés du jour",
+                            "detail": f"{perime.get('qte')} pcs ({perime.get('valeur', 0):,.0f} FDJ)".replace(",", " ")})
+        for t in (ind.get("prix_delta") or [])[:3]:
+            sens = "hausse" if (t.get("delta") or 0) > 0 else "baisse"
+            alertes.append({"niveau": "info", "titre": f"Prix achat en {sens} : {t.get('code')}",
+                            "detail": f"Dernier PR {t.get('dernier_pr')} vs PRMP {t.get('prmp')} (Δ {t.get('delta')})"})
+    ces = conn.execute(
+        "SELECT code, MAX(libelle) AS libelle, SUM(valeur_fichier) AS v "
+        "FROM mouvements WHERE rayon = ? AND jour = ? AND type_normalise = 'cession' "
+        "GROUP BY code ORDER BY v DESC",
+        (rayon, jour)).fetchall()
+    tot_ces = round(sum((r["v"] or 0) for r in ces), 2)
+    if tot_ces > ALERTE_CESSION_VALEUR:
+        top = ces[0]
+        alertes.append({"niveau": "attention", "titre": "Cessions élevées",
+                        "detail": f"{tot_ces:,.0f} FDJ dont {top['code']} ({(top['libelle'] or '')[:30]}).".replace(",", " ")})
+    imp_j1 = db.get_gamme_import_for_jour(conn, rayon, _jour_suivant(jour))
+    if imp_j1 is not None:
+        for a in conn.execute(
+                "SELECT a.code, a.description, h.px_revient FROM anomalies a "
+                "LEFT JOIN article_history h ON h.import_id = a.import_id AND h.code = a.code "
+                "WHERE a.import_id = ? AND a.type IN ('ecart_mouvement', 'nouvel_article') "
+                "ORDER BY a.id LIMIT 20", (imp_j1,)).fetchall():
+            if (a["description"] or "").startswith("Nouvel article"):
+                alertes.append({"niveau": "info", "titre": f"Nouvel article {a['code']}",
+                                "detail": (a["description"] or "")[:160]})
+                continue
+            m = re.search(r"(-?\d+(?:[.,]\d+)?)", a["description"] or "")
+            if not m:
+                continue
+            try:
+                qte = abs(float(m.group(1).replace(",", ".")))
+            except ValueError:
+                continue
+            valeur = round(qte * (a["px_revient"] or 0), 2)
+            if qte > ALERTE_ECART_QTE or valeur > ALERTE_ECART_VALEUR:
+                alertes.append({"niveau": "critique", "titre": f"Écart article {a['code']}",
+                                "detail": f"{qte:g} pcs (~{valeur:,.0f} FDJ) — {(a['description'] or '')[:120]}".replace(",", " ")})
+    return alertes
+
+
+def _jour_suivant(jour):
+    y, mo, d = (int(x) for x in jour.split("-"))
+    return (datetime(y, mo, d) + timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+@router.get("/mouvements/{jour}")
+def story_mouvements(jour: str, rayon: str = config.RAYON):
+    """Payload de l'onglet Mouvements : résumé du jour (stocké à l'import),
+    résumé du jour précédent avec mouvements (deltas J/J-1), série des
+    derniers jours (courbe CA/marge) et alertes calculées. 404 honnête si
+    aucun mouvement ce jour-là (jamais de données inventées)."""
+    if rayon not in config.rayon_ids():
+        return JSONResponse({"ok": False, "erreur": f"Rayon inconnu : {rayon}"}, status_code=404)
+    with db.lock_conn() as conn:
+        resume = _resume_mouvement(conn, rayon, jour)
+        if resume is None:
+            return JSONResponse(
+                {"ok": False, "erreur": f"Pas de mouvements pour {rayon} le {jour}"}, status_code=404)
+        prev = conn.execute(
+            "SELECT jour, resume_json FROM mouvement_imports "
+            "WHERE rayon = ? AND jour < ? AND statut = 'ok' AND resume_json IS NOT NULL "
+            "ORDER BY jour DESC LIMIT 1",
+            (rayon, jour)).fetchone()
+        prev_jour, prev_resume = None, None
+        if prev is not None:
+            try:
+                prev_resume = json.loads(prev["resume_json"])
+                prev_jour = prev["jour"]
+            except ValueError:
+                prev_resume = None
+        serie = []
+        for r in conn.execute(
+                "SELECT jour, resume_json FROM mouvement_imports "
+                "WHERE rayon = ? AND jour <= ? AND statut = 'ok' AND resume_json IS NOT NULL "
+                "ORDER BY jour DESC LIMIT 44",
+                (rayon, jour)).fetchall():
+            try:
+                ind = (json.loads(r["resume_json"]) or {}).get("indicateurs") or {}
+            except ValueError:
+                continue
+            if not isinstance(ind, dict) or "ca" not in ind:
+                continue
+            serie.append({"jour": r["jour"], "ca": ind.get("ca", 0),
+                          "marge": ind.get("marge_encaissee", 0),
+                          "articles": ind.get("nb_articles_vendus", 0)})
+        serie.reverse()
+        alertes = _alertes_mouvements(conn, rayon, jour, resume)
+    return JSONResponse({
+        "ok": True, "rayon": rayon, "jour": jour,
+        "libelle_rayon": config.rayon_libelle(rayon),
+        "resume": resume, "prev_jour": prev_jour, "prev_resume": prev_resume,
+        "serie": serie, "alertes": alertes,
+    })
