@@ -312,6 +312,125 @@ def gamme_rapports(rayon: str, limit: int = 5) -> str:
 
 
 @mcp.tool()
+def gamme_history_export(rayon: str, mots_cles: str, date_debut: str = "",
+                         date_fin: str = "", format: str = "xlsx") -> str:
+    """Exporte l'historique multi-jours d'articles vers un fichier telechargeable.
+
+    Contrairement a `gamme_history_query` (1 seul jour), cet outil parcourt
+    TOUS les jours importes du rayon en une seule demande : pas besoin
+    d'interroger date par date.
+
+    - rayon : identifiant du rayon (obligatoire, verifie cote serveur).
+    - mots_cles : mots separes par virgules/espaces, matches sur le libelle
+      (ex. 'OEUF,EGG' -> UPPER(libelle) LIKE '%OEUF%' OR LIKE '%EGG%').
+      Aucune exclusion automatique : BOEUF, OEUF DE LOMPE, etc. sont inclus.
+    - date_debut / date_fin : YYYY-MM-DD optionnels (periode, sinon tout).
+    - format : 'xlsx' (defaut, avec feuille Resume) ou 'csv'.
+    Renvoie JSON : jours_utilises, nb_articles, nb_lignes, partiel, url du
+    fichier a annoncer avec un lien cliquable dans le chat."""
+    _guard_rayon(rayon)
+    res = history_export.export_history(rayon, mots_cles, date_debut, date_fin, format)
+    if not res.get("success"):
+        return json.dumps(res, ensure_ascii=False)
+    lignes = [
+        f"Export termine : {res['nb_jours']} jours importes, "
+        f"{res['nb_articles']} articles et {res['nb_lignes']} lignes.",
+        f"Colonnes : stock, prix vente/revient (FDJ), marge %, couverture, par article et par jour.",
+    ]
+    if res["partiel"]:
+        lignes.append(
+            f"Export PARTIEL (plafond {history_export.MAX_LIGNES} lignes, "
+            f"total {res['nb_lignes_total']}) : precise date_debut/date_fin pour le reste."
+        )
+    lignes.append(f"Telechargement : {res['url']}")
+    res["resume_markdown"] = "\n".join(lignes)
+    return json.dumps(res, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def gamme_excel_intelligent(plan_json: str = "", base: str = "zero",
+                            rayon: str = "", rayon_id: str = "",
+                            indicateur: str = "", type: str = "",
+                            type_export: str = "", selection: str = "",
+                            seuil_baisse_pts: float = 0,
+                            date_debut: str = "", date_fin: str = "",
+                            mots_cles: str = "", mots_cle: str = "",
+                            codes: str = "", double_classement: str = "",
+                            couleurs: str = "", resume: str = "",
+                            titre: str = "", format: str = "",
+                            pivot: str = "", inclure_stock: str = "") -> str:
+    """Excel intelligent en langage naturel : une ligne par article, dates en
+    colonnes, variations, tris, couleurs, resume, double classement.
+
+    RECOMMANDE (skill excel-intelligent) : plan_json = objet JSON en texte
+    {rayon (id OU libelle, ex. 'frais-surgele'), indicateur
+    (marge|stock|px_vente|px_revient|couv|valeur_stock), selection
+    (baisses|hausses|tous|negatifs|changements_prix|sans_changement|
+    {codes:[...]}|{mots:'...'}), seuil_baisse_pts, date_debut/date_fin
+    (YYYY-MM-DD), double_classement, couleurs, resume, titre}.
+    - base : 'zero' (nouveau fichier) ou 'dernier' (repart du dernier plan
+      memorise fusionne avec plan_json : 'refais-moi ca avec le stock').
+    Arguments plats equivalents acceptes (rayon, indicateur, selection...) :
+    ils completent plan_json, jamais l'inverse.
+    Le fichier est VERIFIE par relecture (lignes uniques, dates en colonnes,
+    couleurs, calculs, tris). Si non conforme, success=false et rien n'est
+    livre : rapporter honnetement, ne jamais bricoler un tableau a la place.
+    Renvoie JSON : nb_articles, nb_jours, top_chute, top_perte, partiel, url
+    du fichier a annoncer avec un lien cliquable dans le chat."""
+    try:
+        plan = json.loads(plan_json) if plan_json else {}
+    except ValueError as e:
+        return json.dumps({"success": False, "erreur": f"plan_json invalide : {e}"},
+                          ensure_ascii=False)
+    if not isinstance(plan, dict):
+        return json.dumps({"success": False, "erreur": "plan_json doit etre un objet."},
+                          ensure_ascii=False)
+    # Arguments plats (Luna improvise parfois hors plan_json) : ils completent
+    # les cles ABSENTES de plan_json, jamais l'inverse. Inconnus ignores.
+    plats = excel_intelligent.plan_from_args({
+        "rayon": rayon, "rayon_id": rayon_id, "indicateur": indicateur,
+        "type": type, "type_export": type_export, "selection": selection,
+        "seuil_baisse_pts": seuil_baisse_pts or None,
+        "date_debut": date_debut, "date_fin": date_fin,
+        "mots_cles": mots_cles, "mots_cle": mots_cle, "codes": codes,
+        "double_classement": double_classement, "couleurs": couleurs,
+        "resume": resume, "titre": titre,
+    })
+    for k, v in plats.items():
+        plan.setdefault(k, v)
+    # Garde rayon sur le plan resolu (id OU libelle ; base='dernier' peut
+    # apporter le rayon). La securite JWT est inchangee.
+    apercu = dict(excel_intelligent.load_last_plan() or {}) if base == "dernier" else {}
+    apercu.update(plan)
+    canonique = config.resolve_rayon(apercu.get("rayon") or "")
+    if canonique is None:
+        valides = ", ".join(f"`{r}`" for r in config.rayon_ids())
+        return json.dumps(
+            {"success": False,
+             "erreur": f"Rayon inconnu : {apercu.get('rayon')!r} (rayons : {valides})."},
+            ensure_ascii=False)
+    _guard_rayon(canonique)
+    plan["rayon"] = canonique
+    res = excel_intelligent.build_excel(plan, base=base)
+    if not res.get("success"):
+        return json.dumps(res, ensure_ascii=False)
+    lignes = [
+        f"Fichier pret : {res['nb_articles']} articles, {res['nb_jours']} jours "
+        f"({res['jours_utilises'][0]} -> {res['jours_utilises'][-1]}).",
+        f"Top perte : {res['top_perte']}.",
+        f"Plus grosse chute : {res['top_chute']}.",
+    ]
+    if res["partiel"]:
+        lignes.append(
+            f"Export PARTIEL (plafond {excel_intelligent.MAX_ARTICLES} articles) : "
+            "precisez date_debut/date_fin ou une selection plus ciblee."
+        )
+    lignes.append(f"Telechargement : {res['url']}")
+    res["resume_markdown"] = "\n".join(lignes)
+    return json.dumps(res, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
 def gamme_negatifs(rayon: str, statut: str = "") -> str:
     """Stocks négatifs du dernier import d'un rayon, enrichis : chaque négatif
     porte son libelle, fournisseur, marque, px_revient, px_vente et valeur_prmp
