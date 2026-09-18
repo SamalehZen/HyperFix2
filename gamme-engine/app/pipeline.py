@@ -222,7 +222,8 @@ def run_import(path, rayon=None, force_jour=None, baseline=False):
             db.insert_snapshot(conn, import_id, rayon, jour, df)
             prev_id = db.get_previous_import(conn, import_id)
             if prev_id is None:
-                resume = first_import_report(conn, import_id, rayon, jour, nb, archive_path)
+                resume = first_import_report(conn, import_id, rayon, jour, nb, archive_path,
+                                             list(getattr(df, "attrs", {}).get("gamme_warnings", [])))
             else:
                 negatifs, anomalies, compared = full_analysis(conn, import_id, rayon, jour, df, prev_id, nb, archive_path)
 
@@ -243,7 +244,7 @@ def run_import(path, rayon=None, force_jour=None, baseline=False):
     return {"ok": True, "resume": resume, "rayon": rayon}
 
 
-def first_import_report(conn, import_id, rayon, jour, nb, archive_path):
+def first_import_report(conn, import_id, rayon, jour, nb, archive_path, warnings=None):
     negatifs = list_negatifs(conn, import_id)
     neg_ref = conn.execute(
         "SELECT code, libelle, stock FROM article_history WHERE import_id = ? AND stock < 0 ORDER BY stock",
@@ -260,6 +261,7 @@ def first_import_report(conn, import_id, rayon, jour, nb, archive_path):
         "jour": jour, "nb_articles": nb, "baseline": True, "rayon": rayon,
         "nouveaux_negatifs": len(neg_ref), "persistants": 0, "corriges": 0, "anomalies": 0,
         "compensateurs_trouves": 0, "sans_compensateur": 0, "non_analyses": 0,
+        "avertissements": warnings or [],
         "message": "Premier import : snapshot de base enregistré, aucune comparaison (pas de J-1). "
                    f"{len(neg_ref)} articles présents en stock négatif dans le fichier de référence.",
     }
@@ -414,6 +416,7 @@ def complete_analysis(import_id, rayon, jour, df, prev_id, nb, negatifs, anomali
             "importants": len([n for n in negatifs if n["priorite"] == "important"]),
             "fallback_heuristique": fallback_heuristique,
             "llm_error": llm_error,
+            "avertissements": list(getattr(df, "attrs", {}).get("gamme_warnings", [])),
         }
         db.record_rapport(conn, import_id, rayon, jour, None, None, resume)
     return resume
