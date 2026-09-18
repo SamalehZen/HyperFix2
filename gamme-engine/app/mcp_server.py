@@ -17,6 +17,7 @@ from . import history_export
 from . import labels
 from . import libeller_prompt
 from . import llm
+from . import mouvements
 from . import normalize
 from . import pipeline
 from . import query
@@ -152,6 +153,63 @@ def _import_en_cours(rayon: str) -> bool:
     return _import_lock(rayon).locked()
 
 
+def _import_mouvements_async(local: str, rayon: str) -> str:
+    """Import d'un fichier de mouvements en arrière-plan (même vocabulaire
+    de statuts que la gamme : demarre/deja_importe/refuse/occupe)."""
+    h = db.sha256_file(local)
+    with db.lock_conn() as conn:
+        info = db.mouvement_import_by_hash(conn, h, rayon)
+        if info is not None:
+            iid, statut, resume_json = info
+            if statut == "erreur":
+                msg_row = conn.execute(
+                    "SELECT message FROM mouvement_imports WHERE id = ?", (iid,)
+                ).fetchone()
+                return json.dumps(
+                    {"statut": "refuse", "erreur": f"Fichier déjà refusé lors d'un passage précédent : {msg_row['message'] or 'raison inconnue'}"},
+                    ensure_ascii=False,
+                )
+            if statut == "ok" and resume_json:
+                resume = json.loads(resume_json)
+                resume["deja_importe"] = True
+                return json.dumps(
+                    {"statut": "deja_importe", "jour": resume.get("jour"), "resume": resume},
+                    ensure_ascii=False,
+                )
+
+    if _import_en_cours(rayon):
+        return json.dumps(
+            {"statut": "occupe", "message": "Un import est déjà en cours pour ce rayon. Attends ~60 s puis vérifie avec gamme_imports."},
+            ensure_ascii=False,
+        )
+
+    def _run():
+        with _import_lock(rayon):
+            try:
+                mouvements.run_mouvement_import(local, rayon=rayon)
+            except Exception as e:  # le statut 'erreur' est posé par l'import
+                try:
+                    with db.lock_conn() as conn:
+                        db.create_mouvement_import(
+                            conn, rayon, pipeline.jour_today(),
+                            os.path.basename(local), db.sha256_file(local),
+                            "erreur", message=str(e),
+                        )
+                except Exception:
+                    pass
+
+    threading.Thread(target=_run, daemon=True).start()
+    return json.dumps(
+        {
+            "statut": "demarre",
+            "message": "Import mouvements lancé en arrière-plan. "
+            "NE PAS rappeler cet outil pour le même fichier. Dans ~60 s : vérifie "
+            "via /api/status (clé mouvement_imports), puis présente le récap.",
+        },
+        ensure_ascii=False,
+    )
+
+
 @mcp.tool()
 def gamme_import_file(path: str, rayon: str) -> str:
     """Importe un fichier de gamme (.xlsx, .xlsm, .csv). path = chemin du fichier
@@ -180,6 +238,11 @@ def gamme_import_file(path: str, rayon: str) -> str:
             {"statut": "refuse", "erreur": f"Fichier introuvable : {path}"},
             ensure_ascii=False,
         )
+
+    # Routage transparent : un fichier de mouvements suit le flux dédié
+    # (table mouvement_imports, jamais le pipeline gamme).
+    if mouvements.is_mouvement_filename(local):
+        return _import_mouvements_async(local, rayon)
 
     # Dédoublonnage rapide par hash : un fichier déjà traité renvoie son résumé
     # immédiatement, sans relancer le pipeline.

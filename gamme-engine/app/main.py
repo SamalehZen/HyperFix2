@@ -15,6 +15,7 @@ from . import backup
 from . import config
 from . import db
 from . import pipeline
+from . import mouvements
 from . import mcp_server
 from . import story_api
 
@@ -112,8 +113,7 @@ def _move_to_erreurs(path, rayon, filename, reason):
 
 def process_file(path, rayon):
     filename = os.path.basename(path)
-    h = db.sha256_file(path)
-    with db.lock_conn() as conn:
+    h = db.sha256_file(path)    with db.lock_conn() as conn:
         info = db.import_statut_for_hash(conn, h, rayon)
         if info is not None:
             import_id, statut, has_rapport = info
@@ -151,6 +151,44 @@ def process_file(path, rayon):
         PROCESSING.discard(path)
 
 
+def process_mouvement_file(path, rayon):
+    """Miroir de process_file pour les mouvements (flux séparé, table dédiée)."""
+    filename = os.path.basename(path)
+    h = db.sha256_file(path)
+    with db.lock_conn() as conn:
+        info = db.mouvement_import_by_hash(conn, h, rayon)
+        if info is not None:
+            _, statut, _ = info
+            if statut == "erreur":
+                _move_to_erreurs(path, rayon, filename, "déjà refusé (hash connu en erreur)")
+                return
+            os.remove(path)
+            print(f"[watcher-mouvements] {filename} déjà importé, retiré du dépôt.")
+            return
+    if path in PROCESSING:
+        return
+    PROCESSING.add(path)
+    try:
+        res = mouvements.run_mouvement_import(path, rayon=rayon)
+        if res.get("ok"):
+            print(f"[watcher-mouvements] ✓ Import réussi {filename}: {json.dumps(res['resume'], ensure_ascii=False)}")
+            os.remove(path)
+        else:
+            err = res.get("erreur") or "raison inconnue"
+            print(f"[watcher-mouvements] ✗ Import refusé {filename}: {err}")
+            _move_to_erreurs(path, rayon, filename, err)
+            alerts.send_telegram(
+                f"❌ Import mouvements refusé ({rayon}) — {filename}\nRaison : {err}\n"
+                f"Fichier déplacé vers depot/{rayon}/erreurs/ (vérifiable via /status ou le chat)."
+            )
+    except Exception as e:
+        print(f"[watcher-mouvements] ✗ Erreur {filename}: {e}")
+        _move_to_erreurs(path, rayon, filename, str(e))
+        alerts.send_telegram(f"❌ Erreur inattendue mouvements ({rayon}) — {filename} : {e}")
+    finally:
+        PROCESSING.discard(path)
+
+
 def watcher_loop():
     while True:
         try:
@@ -161,7 +199,10 @@ def watcher_loop():
                     p = os.path.join(depot, f)
                     if os.path.isfile(p) and f.lower().endswith((".xlsx", ".xlsm", ".csv")):
                         with BOOTSTRAP_LOCK:
-                            process_file(p, rayon)
+                            if mouvements.is_mouvement_filename(p):
+                                process_mouvement_file(p, rayon)
+                            else:
+                                process_file(p, rayon)
         except Exception as e:
             print(f"[watcher] Erreur de scan: {e}")
         time.sleep(config.POLL_SECONDS)
@@ -197,8 +238,16 @@ def status(rayon: str = None):
             args.append(rayon)
         q += " ORDER BY id DESC LIMIT 10"
         imports = conn.execute(q, args).fetchall()
+        mq = "SELECT id, rayon, jour, date_import, fichier_source, nb_mouvements, statut, message FROM mouvement_imports"
+        margs = []
+        if rayon:
+            mq += " WHERE rayon = ?"
+            margs.append(rayon)
+        mq += " ORDER BY id DESC LIMIT 5"
+        mouvement_imports = conn.execute(mq, margs).fetchall()
     return JSONResponse({"ok": True, "depot": config.DEPOT_DIR, "rayons": config.rayons(),
-                         "imports": [dict(r) for r in imports]})
+                         "imports": [dict(r) for r in imports],
+                         "mouvement_imports": [dict(r) for r in mouvement_imports]})
 
 
 @app.get("/api/rayons")
@@ -228,7 +277,10 @@ def trigger_import(path: str, rayon: str = config.RAYON):
         return JSONResponse({"ok": False, "erreur": f"Rayon inconnu: {rayon}"}, status_code=400)
     if not os.path.exists(config.map_nao_storage_path(path)):
         return JSONResponse({"ok": False, "erreur": f"Fichier introuvable: {path}"}, status_code=404)
-    res = pipeline.run_import(path, rayon=rayon)
+    if mouvements.is_mouvement_filename(path):
+        res = mouvements.run_mouvement_import(path, rayon=rayon)
+    else:
+        res = pipeline.run_import(path, rayon=rayon)
     return JSONResponse(res)
 
 
