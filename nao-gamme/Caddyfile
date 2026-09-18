@@ -1,5 +1,11 @@
 # HyperFix prod — gestion.hypeer.cloud (DNS uniquement, TLS direct Caddy)
 # ⚠️ PAS d'encode global zstd/gzip: bufferise le SSE /api/agent (analyzing infini) — encode seulement sur assets statiques
+# Sim chat-light — même VPS, TLS direct (DNS uniquement)
+sim.hypeer.cloud {
+	encode gzip
+	reverse_proxy sim_light:3000
+}
+
 gestion.hypeer.cloud {
 	handle /rapports/* {
 		basicauth {
