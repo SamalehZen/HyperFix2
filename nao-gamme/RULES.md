@@ -126,6 +126,23 @@ ORDER BY CAST("Valeur stock   PRMP" AS DOUBLE) DESC
 Dormant avec `Stock` > 0 = capital immobilisé → prioriser par valeur PRMP
 décroissante. Dormant avec `Stock` = 0 = pas prioritaire.
 
+### Mouvements journaliers (ventes prouvées, depuis 09/2026)
+
+Un fichier `Stock_DetailMouvement*.xlsx` déposé dans le chat s'importe via
+**`gamme_import_file`** comme une gamme (routage automatique côté moteur,
+jamais via un autre outil). Le résumé renvoyé contient par jour : `nb_mouvements`,
+`nb_articles`, `familles` (vente/livraison/inventaire/retour_fournisseur/cession/
+demarque…), `reconciliation` (`reconcilié` ou N `écart(s)`), `indicateurs`
+(`ca`, `marge_encaissee`, `top_ventes`, `demarque`, `livraisons`, `prix_delta`,
+`dormants`). Règles dures : la colonne `Valeur` du fichier = **coût PRMP,
+jamais du CA** (CA = quantité × prix applicable, déjà calculé dans `ca`) ;
+`SM` = ventes uniquement ; le signe vient de `Sens`, pas du type.
+**Dormants prouvés** (`dormants`, seuil 90 j) : niveaux `prouve` (0 vente
+prouvée depuis ≥ 90 j consécutifs), `partiel` (données insuffisantes),
+`estime` (ancien `couv=999` sans historique) — **ne jamais présenter un
+`partiel`/`estime` comme prouvé** ; citer `faux_dormants` (`couv=999` mais
+vendu) et `dormants_caches` à part. Détail : `docs/mouvements-journaliers.md`.
+
 ### Promotions
 
 Colonnes : `PV promo` (prix promo FDJ), `Date Dbt`/`Date fin` (période,
