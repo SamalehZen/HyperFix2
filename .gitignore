@@ -11,6 +11,7 @@ __pycache__/
 nao-gamme/docs/rapports/
 nao-gamme/docs/etiquettes/
 nao-gamme/docs/images/
+nao-gamme/docs/exports/
 
 # Environnement
 .env
