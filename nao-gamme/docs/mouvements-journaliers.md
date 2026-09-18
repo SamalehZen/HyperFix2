@@ -1,7 +1,7 @@
 # Mouvements journaliers — contexte complet + plan HyperFix2 V2
 
-Date : 2026-09-18. Statut : SPÉC ENRICHIE (mise à jour avec conflit watcher,
-placement dashboard, schéma détaillé, questions ouvertes) — exécution en attente (« go mouvements »).
+Date : 2026-09-18. Statut : SPÉC ENRICHIE (conflit watcher, schéma, dashboard,
+point 6 dormants prouvés) — exécution en attente (« go mouvements »).
 Fichier source : `/root/Stock_DetailMouvement (93).xlsx` (ne pas déplacer : référence d'analyse).
 Projet : `/opt/HyperFix2` (moteur `gamme-engine`, app `nao-gamme`). Base : `/storage/gamme/historique.db`.
 
@@ -68,6 +68,9 @@ Même rythme que la gamme (quotidien + backfill des jours précédents, même jo
 5. SM = ventes uniquement (pas de casse/périmés dedans).
 6. CA : « tout au prix promo pendant la période » = OUI confirmé.
 7. Casse/périmés : DANS le même fichier (absents le 13/09, journée propre).
+8. Dormants (décisions 2026-09-18) : **réveil par vente SM UNIQUEMENT**
+   (EI/SI/RM/cessions = contexte affiché, ne réveillent pas) ; **stock nul
+   exclu** des dormants ; seuil **configurable `DORMANT_JOURS`, défaut 90**.
 
 ## 5. Config initiale `types_mouvements.json` (modifiable sans recoder)
 
@@ -126,10 +129,12 @@ CREATE INDEX idx_mouvements_code_mvt ON mouvements(code_mvt, jour);
    ligne sans date rejetée proprement, types inconnus signalés) → table
    `mouvements` + config + rapport honnête.
 2. **Backfill** : anciens fichiers, ordre chrono, réconciliation/jour.
+   Pour des dormants **prouvés** complets, viser ~90 jours d'historique
+   mouvements (voir §6bis — en attendant, niveaux « estimé »/« partiel »).
 3. **Réconciliation + indicateurs** : équation quotidienne, `ecart_inexplique`
    (nouvelle anomalie), CA reconstruit, marge encaissée, rotation vraie,
    démarque connue/inconnue, prix achat Δ (Dernier PR vs PRMP), efficacité
-   promo (ventes/jour pendant vs hors promo).
+   promo (ventes/jour pendant vs hors promo), `dormant_prouve` (§6bis).
 4. **Dashboard + Excel** : BACKEND d'abord — étendre `GET /story-data/{jour}` et
    `GET /stats/{jour}` (`gamme-engine/app/story_api.py`), PUIS l'UI du dashboard
    mix2 de production `/story/dashboard/mix2?jour=<jour>&rayon=<rayon>`.
@@ -143,19 +148,51 @@ CREATE INDEX idx_mouvements_code_mvt ON mouvements(code_mvt, jour);
    « Dormants prouvés », « Promos » (efficacité), « Alertes ».
    Excel : ventes par article en colonnes (`excel_intelligent.py`).
 5. **Alertes** : retour fournisseur, cession massive, périmé du jour,
-   écart > seuil, sans vente depuis N jours (vrai dormant prouvé).
+   écart > seuil, article devenu dormant (passage des `DORMANT_JOURS`),
+   dormant à gros capital.
+
+## 6bis. Point 6 — Dormants prouvés (règle des 3 mois, figée 2026-09-18)
+
+Constat (vérifié 2026-09-18, import n°77 du 17/09) : **337 dormants estimés**
+(`couv=999`, stock>0) → **25 668 250 FDJ** bloqués. Mais `couv=999` est une
+estimation, fausse dans les 2 sens : **faux dormants** (`couv=999` mais vendu
+récemment) et **dormants cachés** (`couv<999` mais 0 vente depuis 3 mois).
+
+- **Définition** : dormant prouvé = `stock > 0` ET **0 vente (SM)** depuis
+  ≥ `DORMANT_JOURS` jours calendaires. Preuve affichée : date + type du
+  **dernier mouvement** + capital bloqué (`stock × PRMP`).
+- **Réveil SM uniquement** : EI/SI/RM/cessions affichés en contexte, ne
+  réveillent jamais (un ajustement n'est pas un client).
+- **Stock nul exclu** (rien de bloqué).
+- **Seuil configurable** : `DORMANT_JOURS = int(os.getenv("DORMANT_JOURS", "90"))`
+  dans `config.py` (même modèle que `GAMME_CHUTE_SEUIL=200`,
+  `GAMME_POLL_SECONDS=60`) ; changement par l'utilisateur = 1 ligne dans
+  `nao-gamme/.env` + `docker compose restart gamme-engine`, sans toucher au code.
+- **Jour sans fichier ≠ 0 vente** : réutiliser la logique `jours_manquants`
+  existante — jamais de preuve inventée sur un trou.
+- **3 niveaux de preuve** (toujours étiquetés au dashboard) :
+  `estime` (`couv=999`, sans historique) / `partiel` (0 vente depuis N < 90 j
+  de données) / `prouve` (0 vente depuis ≥ 90 j).
+- **Indicateur** par article et par jour : `dormant_prouve` + `dernier_mouvement_le`
+  + `dernier_mouvement_type` + `jours_sans_vente` + `niveau_preuve`.
+- **Dashboard** : panneau « Dormants prouvés » trié par capital + 2 listes bonus
+  (faux dormants, dormants cachés).
+- **Alertes** : passage des 90 j + dormant à gros capital.
 
 ## 7. Tests d'acceptation
 
 - Réconciliation exacte 13/09 (12982, 128427, 44761) + 15218 (CA 28 800).
 - TOTAL exclu (jamais compté) ; doublon jour refusé ; type inconnu signalé.
+- Dormants : `DORMANT_JOURS` défaut 90 ; niveaux `estime/partiel/prouve`
+  étiquetés ; stock nul exclu ; réveil SM uniquement.
 - Équation équilibrée sur fichier test ; suite pytest complète verte ;
   rebuild + moteur healthy.
 
 ## 8. En attente (non bloquant)
 
 - Liste des codes (cessions + casse) quand l'utilisateur l'aura.
-- Fichiers mouvements des jours précédents (backfill).
+- Fichiers mouvements des jours précédents (backfill — ~90 jours pour des
+  dormants prouvés complets ; 39 jours de gamme déjà importés au 17/09).
 - Rappel : `/root/GAMME COMPLET (1).zip` + 4 xlsx = anciennes gammes déjà
   importées (pas de mouvements dedans).
 
