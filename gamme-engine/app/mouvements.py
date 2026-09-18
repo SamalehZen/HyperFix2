@@ -98,7 +98,7 @@ def read_mouvements(path):
 
 
 def validate_mouvements(df):
-    """Retourne (df_clean, meta). meta = {erreurs, avertissements, compteurs}.
+    """Retourne (lignes, meta). meta = {erreurs, avertissements, compteurs}.
     Les lignes sans Code (dont TOTAL) sont exclues ; les lignes sans date
     sont rejetées proprement ; les types inconnus/inutilisés sont CONSERVÉS
     et signalés (jamais de traitement silencieux)."""
@@ -204,6 +204,23 @@ def validate_mouvements(df):
 
     # Tri chronologique (le fichier n'est pas trié) pour chaîner stock_apres.
     lignes.sort(key=lambda l: (l["jour"], l["heure_mvt"] or ""))
+    # M8 — contrôle de chaîne Qte.après par (jour, article) : une rupture
+    # signale un trou ou une coquille (warning seul, jamais bloquant).
+    vus, signales = {}, set()
+    for l in lignes:
+        cle = (l["jour"], l["code"])
+        if l["stock_apres"] is None:
+            vus.pop(cle, None)
+            continue
+        if cle in vus and cle not in signales:
+            attendu = round(vus[cle][0] + l["quantite_signee"], 3)
+            if abs(l["stock_apres"] - attendu) > 0.01:
+                warnings.append(
+                    f"Chaîne Qte.après incohérente article {l['code']} le {l['jour']} "
+                    f"(attendu {attendu} après {vus[cle][1]}, lu {l['stock_apres']} "
+                    f"à {l['heure_mvt'] or 'heure ?'})")
+                signales.add(cle)
+        vus[cle] = (l["stock_apres"], l["heure_mvt"] or "heure ?")
     if nb_vides:
         warnings.append(f"{nb_vides} ligne(s) sans Code ignorée(s) (dont TOTAL)")
     if nb_sans_date:
@@ -214,20 +231,16 @@ def validate_mouvements(df):
         "compteurs": {
             "nb_lignes": len(lignes), "nb_articles": len({l["code"] for l in lignes}),
             "jours": jours, "nb_vides": nb_vides, "nb_sans_date": nb_sans_date,
+            "feuille": df.attrs.get("mouvement_sheet"),
         },
     }
     return lignes, meta
 
 
-def jour_from_mouvements(lignes):
-    jours = sorted({l["jour"] for l in lignes})
-    return jours[0] if len(jours) == 1 else None
-
-
-def archive_mouvement(path, jour, rayon):
+def archive_mouvement(path, rayon, label):
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     ext = os.path.splitext(path)[1] or ".xlsx"
-    dest_dir = config.rayon_imports_dir(rayon, jour)
+    dest_dir = config.rayon_imports_dir(rayon, label.split("_au_")[0])
     os.makedirs(dest_dir, exist_ok=True)
     dest = os.path.join(dest_dir, f"{ts}_mouvement_original{ext}")
     shutil.copy2(path, dest)
@@ -270,21 +283,50 @@ def run_mouvement_import(path, rayon=None):
                 resume["deja_importe"] = True
                 return {"ok": True, "resume": resume, "rayon": rayon}
 
-    jour = jour_from_mouvements(lignes)
-    if jour is None:
-        jours = sorted({l["jour"] for l in lignes})
-        with db.lock_conn() as conn:
-            db.create_mouvement_import(conn, rayon, jours[0] if jours else _pl.jour_today(),
-                                       os.path.basename(path), h, "erreur",
-                                       message=f"Fichier multi-dates non supporté : {jours}")
-        return {"ok": False, "erreur": f"Fichier multi-dates non supporté : {jours}", "rayon": rayon}
+    # M1 — split multi-dates : un fichier = N jours traités en ordre chrono.
+    # Chaque jour est atomique (unicité rayon+jour) ; les jours déjà importés
+    # sont sautés proprement (chevauchements sans doublons).
+    jours = sorted({l["jour"] for l in lignes})
+    label = jours[0] if len(jours) == 1 else f"{jours[0]}_au_{jours[-1]}"
+    archive_path, h = archive_mouvement(path, rayon, label)
+    basename = os.path.basename(path)
 
-    archive_path, h = archive_mouvement(path, jour, rayon)
+    resultats = []
+    for jour in jours:
+        try:
+            resultats.append(_importe_jour(
+                rayon, jour, [l for l in lignes if l["jour"] == jour],
+                basename, h, archive_path, meta))
+        except Exception as e:
+            resultats.append({"jour": jour, "statut": "erreur", "erreur": str(e),
+                              "nb_mouvements": 0, "avertissements": []})
+
+    resume = {
+        "fichier": basename, "rayon": rayon, "jour": jours[-1], "jours": jours,
+        "feuille": meta["compteurs"].get("feuille"),
+        "jours_importes": [r["jour"] for r in resultats if r["statut"] == "ok"],
+        "jours_deja": [r["jour"] for r in resultats if r["statut"] == "deja_importe"],
+        "jours_erreur": {r["jour"]: r.get("erreur") for r in resultats if r["statut"] == "erreur"},
+        "nb_mouvements": sum(r.get("nb_mouvements", 0) for r in resultats),
+        "avertissements": sorted({w for r in resultats for w in r.get("avertissements", [])})[:20],
+        "details": {r["jour"]: r.get("resume") for r in resultats if "resume" in r},
+    }
+    if all(r["statut"] == "deja_importe" for r in resultats):
+        resume["deja_importe"] = True
+    if not any(r["statut"] in ("ok", "deja_importe") for r in resultats):
+        return {"ok": False,
+                "erreur": "; ".join(f"{j}: {e}" for j, e in resume["jours_erreur"].items()),
+                "rayon": rayon}
+    return {"ok": True, "resume": resume, "rayon": rayon}
+
+
+def _importe_jour(rayon, jour, lignes, basename, h, archive_path, meta):
+    """Importe UN jour. Retourne {jour, statut: ok|deja_importe|erreur, ...}."""
     import_id = None
     try:
         with db.lock_conn() as conn:
             import_id = db.create_mouvement_import(
-                conn, rayon, jour, os.path.basename(path), h, "ok",
+                conn, rayon, jour, basename, h, "ok",
                 nb_mouvements=len(lignes), archive_path=archive_path)
             rows = [(
                 import_id, jour, rayon, l["code"], l["libelle"], l["classification"],
@@ -294,24 +336,33 @@ def run_mouvement_import(path, rayon=None):
                 l["heure_creation"], l["dernier_pr"], l["dernier_pamp"], l["dernier_pa"],
                 l["stock_physique"], l["date_dernier_comptage"], l["qte_dernier_comptage"],
                 l["date_dernier_inv"], l["qte_dernier_inv"], l["date_derniere_entree"],
-                l["date_derniere_sortie"], os.path.basename(path), h,
+                l["date_derniere_sortie"], basename, h,
             ) for l in lignes]
             db.insert_mouvements(conn, import_id, rayon, jour, rows)
     except sqlite3.IntegrityError:
         with db.lock_conn() as conn:
             exist = conn.execute(
-                "SELECT statut FROM mouvement_imports WHERE rayon = ? AND jour = ?",
+                "SELECT id, statut FROM mouvement_imports WHERE rayon = ? AND jour = ?",
                 (rayon, jour),
             ).fetchone()
-        statut_exist = exist["statut"] if exist else "?"
-        return {"ok": False,
-                "erreur": f"Journée {jour} déjà importée pour ce rayon (statut existant : {statut_exist})",
-                "rayon": rayon}
-    except Exception as e:
-        if import_id is not None:
+        if exist and exist["statut"] == "erreur":
+            # Reprise après échec : create+insert sont atomiques donc aucune
+            # ligne partielle — on repart proprement.
             with db.lock_conn() as conn:
-                db.set_mouvement_import_statut(conn, import_id, "erreur", f"Import interrompu : {e}")
-        return {"ok": False, "erreur": f"Import interrompu : {e}", "rayon": rayon}
+                conn.execute("DELETE FROM mouvements WHERE import_id = ?", (exist["id"],))
+                conn.execute("DELETE FROM mouvement_imports WHERE id = ?", (exist["id"],))
+            return _importe_jour(rayon, jour, lignes, basename, h, archive_path, meta)
+        return {"jour": jour, "statut": "deja_importe", "nb_mouvements": 0, "avertissements": []}
+    except Exception as e:
+        with db.lock_conn() as conn:
+            deja = conn.execute(
+                "SELECT 1 FROM mouvement_imports WHERE rayon = ? AND jour = ?",
+                (rayon, jour)).fetchone()
+            if deja is None:
+                db.create_mouvement_import(conn, rayon, jour, basename, h,
+                                           "erreur", message=f"Import interrompu : {e}")
+        return {"jour": jour, "statut": "erreur", "erreur": f"Import interrompu : {e}",
+                "nb_mouvements": 0, "avertissements": []}
 
     compteur_familles = {}
     for l in lignes:
@@ -344,7 +395,8 @@ def run_mouvement_import(path, rayon=None):
             db.set_mouvement_import_statut(conn, import_id, "ok", resume["message"], resume=resume)
     except Exception as e:
         resume["indicateurs"] = {"statut": f"non calculés : {e}"}
-    return {"ok": True, "resume": resume, "rayon": rayon}
+    return {"jour": jour, "statut": "ok", "nb_mouvements": len(lignes),
+            "avertissements": resume["avertissements"], "resume": resume}
 
 
 def _jour_suivant(jour):
@@ -434,15 +486,34 @@ def indicateurs_jour(conn, rayon, jour):
     }
 
 
+def _trailing_run(jours_data, jour):
+    """Fenêtre de jours consécutifs avec fichier, se terminant au jour J
+    (ou au dernier jour de données ≤ J). Un jour sans fichier = caméra
+    éteinte : la preuve redémarre après chaque trou."""
+    ens = set(jours_data)
+    passe = sorted(d for d in ens if d <= jour)
+    if not passe:
+        return None, 0
+    fin = passe[-1]
+    d = datetime.strptime(fin, "%Y-%m-%d").date()
+    n = 0
+    while d.isoformat() in ens:
+        n += 1
+        d -= timedelta(days=1)
+    debut = (datetime.strptime(fin, "%Y-%m-%d").date() - timedelta(days=n - 1)).isoformat()
+    return debut, n
+
+
 def _dormants(conn, rayon, jour, gamme):
-    """Dormants prouvés (§6bis) : réveil SM uniquement, stock nul exclu,
-    niveaux estime/partiel/prouve. Jour sans fichier ≠ 0 vente (couverture)."""
+    """Dormants prouvés (§6bis + trailing window) : réveil SM uniquement,
+    stock nul exclu, niveaux estime/partiel/prouve. Un article jamais vu
+    sur une fenêtre complète est PROUVÉ (borne = début de fenêtre)."""
     seuil = config.DORMANT_JOURS
     j0 = datetime.strptime(jour, "%Y-%m-%d").date()
-    jours_data = [r["jour"] for r in conn.execute(
-        "SELECT DISTINCT jour FROM mouvements WHERE rayon = ? AND jour <= ? ORDER BY jour",
-        (rayon, jour)).fetchall()]
-    nb_jours_data = len(jours_data)
+    jours_data = sorted({r["jour"] for r in conn.execute(
+        "SELECT DISTINCT jour FROM mouvements WHERE rayon = ? AND jour <= ?",
+        (rayon, jour)).fetchall()})
+    debut_run, run_len = _trailing_run(jours_data, jour)
     dernier_sm = {}
     for r in conn.execute(
             "SELECT code, MAX(jour) AS d FROM mouvements "
@@ -456,33 +527,45 @@ def _dormants(conn, rayon, jour, gamme):
             continue
         d = dernier_sm.get(code)
         cap = round(stock * (g.get("px_revient") or 0), 2)
+        couv = g.get("couv") or 0
         item = {"code": code, "libelle": g.get("libelle"), "stock": stock,
                 "capital": cap, "dernier_vente": d}
-        if d is None:
-            if (g.get("couv") or 0) == 999:
-                item["niveau"] = "estime"
-                estimes.append(item)
-            else:
+        if d is not None and (debut_run is None or d >= debut_run):
+            gap = (j0 - datetime.strptime(d, "%Y-%m-%d").date()).days
+            item["jours_sans_vente"] = gap
+            if gap >= seuil:
+                item["niveau"] = "prouve"
+                prouves.append(item)
+                if couv != 999:
+                    caches.append(item)
+            elif gap > 0:
                 item["niveau"] = "partiel"
-                item["jours_sans_vente"] = nb_jours_data
                 partiels.append(item)
+                if couv == 999:
+                    faux.append(item)
             continue
-        gap = (j0 - datetime.strptime(d, "%Y-%m-%d").date()).days
-        item["jours_sans_vente"] = gap
-        if gap >= seuil:
+        # Pas de vente sur toute la fenêtre (jamais vu ou avant) : la borne
+        # prouvable est la fenêtre elle-même.
+        item["borne_preuve"] = debut_run
+        item["jours_sans_vente"] = run_len
+        if run_len >= seuil:
             item["niveau"] = "prouve"
             prouves.append(item)
-            if (g.get("couv") or 0) != 999:
+            if couv != 999:
                 caches.append(item)
-        elif gap > 0:
+        elif d is None and couv == 999:
+            item["niveau"] = "estime"
+            estimes.append(item)
+        else:
             item["niveau"] = "partiel"
             partiels.append(item)
-            if (g.get("couv") or 0) == 999:
+            if d is not None and couv == 999:
                 faux.append(item)
     keycap = lambda x: x["capital"]
     prouves.sort(key=keycap, reverse=True)
     return {
-        "seuil_jours": seuil, "jours_donnees": nb_jours_data,
+        "seuil_jours": seuil, "jours_donnees": len(jours_data),
+        "fenetre": {"debut": debut_run, "longueur": run_len},
         "nb_prouves": len(prouves), "nb_partiels": len(partiels),
         "nb_estimes": len(estimes),
         "capital_prouve": round(sum(x["capital"] for x in prouves), 2),
@@ -520,25 +603,45 @@ def reconcile_jour(conn, rayon, jour):
         net[r["code"]] = net.get(r["code"], 0) + (r["quantite_signee"] or 0)
     ecarts = []
     for code in set(stock_j) | set(stock_j1) | set(net):
-        attendu = (stock_j.get(code) or 0) + net.get(code, 0)
         constate = stock_j1.get(code)
         if constate is None:
             continue  # article sorti de la gamme : pas un écart mouvements
+        if code not in stock_j:
+            # M4 — nouvel article en gamme J+1 (assortiment qui bouge) :
+            # informatif, jamais un écart.
+            lib = conn.execute(
+                "SELECT libelle FROM article_history WHERE import_id = ? AND code = ?",
+                (imp_j1, code)).fetchone()
+            db.record_anomalie(conn, imp_j1, rayon, jour_suiv, code, "nouvel_article",
+                               f"Nouvel article en gamme (stock {constate}, net mouvements {round(net.get(code, 0), 3)})",
+                               0, constate)
+            continue
+        attendu = (stock_j.get(code) or 0) + net.get(code, 0)
         ecart = round((constate or 0) - attendu, 3)
         if ecart:
             lib = conn.execute(
                 "SELECT libelle FROM article_history WHERE import_id = ? AND code = ?",
                 (imp_j1, code)).fetchone()
+            # M5 — chevauchement snapshot : un mouvement temps réel vers 9h-10h
+            # peut tomber avant/après l'export gamme (9h-10h) → informatif.
+            chev = any((h or "")[:5] >= "09:00" and (h or "")[:5] < "10:00" and t != "vente"
+                       for t, h in conn.execute(
+                           "SELECT DISTINCT type_normalise, heure_mvt FROM mouvements "
+                           "WHERE rayon = ? AND jour = ? AND code = ?",
+                           (rayon, jour, code)).fetchall())
+            descr = (f"Écart inexpliqué {ecart} ({jour} : {stock_j.get(code, 0)} + "
+                     f"({round(net.get(code, 0), 3)}) = {round(attendu, 3)} attendu, {constate} constaté)")
+            if chev:
+                descr += " — chevauchement snapshot 9h-10h probable"
             ecarts.append({
                 "code": code, "libelle": (lib["libelle"] if lib else None),
                 "stock_j": stock_j.get(code, 0), "net_mouvements": round(net.get(code, 0), 3),
                 "attendu": round(attendu, 3), "constate": constate, "ecart": ecart,
+                "chevauchement_snapshot": chev,
             })
+            db.record_anomalie(conn, imp_j1, rayon, jour_suiv, code, "ecart_mouvement",
+                               descr, round(attendu, 3), constate)
     ecarts.sort(key=lambda e: abs(e["ecart"]), reverse=True)
-    for e in ecarts:
-        db.record_anomalie(conn, imp_j1, rayon, jour_suiv, e["code"], "ecart_mouvement",
-                           f"Écart inexpliqué {e['ecart']} ({jour} : {e['stock_j']} + ({e['net_mouvements']}) = {e['attendu']} attendu, {e['constate']} constaté)",
-                           e["attendu"], e["constate"])
     couverture["statut"] = "reconcilié" if not ecarts else f"{len(ecarts)} écart(s)"
     couverture["nb_ecarts"] = len(ecarts)
     return ecarts, couverture
