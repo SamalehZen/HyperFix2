@@ -121,6 +121,8 @@ services:
             CLASSIF_MAX_LOT: ${CLASSIF_MAX_LOT:-20}
             GAMME_DATA_DIR: /storage/gamme
             NAO_PROJECT_DIR: /app/nao-project
+            # Sauvegardes locales : 7 jours (historique long dans le cloud B2 via restic)
+            GAMME_BACKUP_RETENTION_DAYS: ${GAMME_BACKUP_RETENTION_DAYS:-7}
             # Alertes Telegram (échecs d'import) — même token que le bot nao
             TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
         volumes:
