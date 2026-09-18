@@ -79,6 +79,33 @@ def rayon_ids():
     return sorted(load_rayons().keys())
 
 
+def _norm_rayon(s) -> str:
+    """Minuscules, sans accents, sans espaces superflus : 'Frais surgelé',
+    'FRAIS-SURGELE', ' frais-surgele ' -> meme cle (tirets/espaces unifies)."""
+    s = str(s or "").strip().lower().replace("_", "-")
+    s = "".join(c for c in unicodedata.normalize("NFKD", s)
+                if not unicodedata.combining(c))
+    return re.sub(r"[\s]+", "-", s)
+
+
+def resolve_rayon(value):
+    """Accepte un id OU un libelle de rayon (insensible casse/accents/
+    espaces) et rend l'id canonique, ou None si aucun match. Ne remplace
+    JAMAIS le controle d'autorisation (_guard_rayon cote MCP)."""
+    if value is None:
+        return None
+    n = _norm_rayon(value)
+    if not n:
+        return None
+    for rid in rayon_ids():
+        if _norm_rayon(rid) == n:
+            return rid
+    for rid in rayon_ids():
+        if _norm_rayon(rayon_libelle(rid)) == n:
+            return rid
+    return None
+
+
 def rayon_libelle(rayon):
     return load_rayons().get(rayon, {}).get("libelle", rayon)
 
