@@ -1,0 +1,12 @@
+name: question_visuelle
+prompt: "top 5 des négatifs par capital PRMP : donne 1 graphique bar + 1 tableau avec effets rouge/vert et 1 phrase d'interprétation."
+sql: |
+  SELECT 'question_visuelle_check' AS check_name
+expect:
+  max_charts: 2
+  chart_types:
+    - "bar"
+  forbidden_chart_types:
+    - "horizontal_bar"
+  requires_table_conditional_formats: true
+  requires_interpretation: true
