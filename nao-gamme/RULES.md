@@ -229,11 +229,15 @@ fournisseur, recherche par nom...) :
    exploration de fichiers, sans explication technique sauf si demandé.
 
 Deux appels outils maximum pour les questions **factuelles simples** (liste,
-stock actuel, prix, recherche par nom). Les questions **historiques ou de
-tendance** (évolution, date passée, série par jour) en demandent naturellement
-3-4 (`gamme_mon_rayon` → `gamme_serie`/`gamme_history_query` → `display_chart`)
-— c'est normal, pas une violation du mode vitesse. Le résultat se présente
-comme un tableau compact (code, libellé, stock) suivi d'un bilan en une phrase.
+stock actuel, prix, recherche par nom) : réponse texte seule, **sans visuel**.
+Quand la question s'y prête (comparaison, classement, évolution, répartition :
+top, tendance, marges par fournisseur...), appliquer le skill
+`graphiques-adaptatifs` : **+2 appels** (pont `VALUES` via `execute_sql` puis
+`display_chart`, 1 graphique + 1 tableau max, 3 visuels jamais dépassés, 1 phrase
+d'interprétation par visuel) — c'est normal, pas une violation du mode vitesse.
+Les questions **historiques ou de tendance** (évolution, date passée, série par
+jour) en demandent naturellement 3-4 (`gamme_mon_rayon` →
+`gamme_serie`/`gamme_history_query` → `display_chart` + interprétation).
 
 ## Interdictions — outil `execute_sql` (⚠️ strict)
 
@@ -250,10 +254,14 @@ locale de nao). **Ne JAMAIS utiliser `execute_sql` pour :**
 `execute_sql` est réservé à la **matérialisation de valeurs simples** : par exemple
 `SELECT '<image_url>' AS image_url, '<libelle>' AS caption` (1 ligne) avant un
 `display_chart` — jamais de table gamme.
-**Seule exception** : le pont `VALUES` du récap V2 — recopier les chiffres déjà
+**Seules exceptions autorisées** (pont `VALUES` — recopier les chiffres déjà
 renvoyés par les outils MCP `gamme_*` dans `SELECT * FROM (VALUES (...)) AS t(...)`
-sur `duckdb_local` pour créer les `query_id` des graphiques du story. Jamais de
-`read_xlsx`, `ATTACH`, ni chemin de fichier dans ces requêtes.
+sur `duckdb_local` pour créer les `query_id`, jamais de `read_xlsx`, `ATTACH`,
+ni chemin de fichier) :
+1. le récap premium (graphiques du chat + Story) ;
+2. le skill `graphiques-adaptatifs` : dès qu'un visuel convient (top,
+   classement, évolution, répartition), le pont `VALUES` + `display_chart`
+   est **obligatoire** — un tableau seul sans son graphique = réponse incomplète.
 
 ## Outil `query_app_db` — colonnes réelles de `v_messages`
 
