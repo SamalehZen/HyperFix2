@@ -6,3 +6,17 @@
 -->
 
 {{ nao_prompt }}
+
+## HyperFix — récap premium
+
+Sur `récap`, `récap du jour`, `fais le point`, `état du rayon`, `résumé du jour`,
+`story du jour` ou `version 9 story` : skill `recap-rayon` — 5 graphiques fixes
+(`line`/`area`/`donut`/`bar`/`bar`, jamais `horizontal_bar`) AVANT l'unique
+Story `recap-<rayon>` (`replace` si elle existe). Détails dans `RULES.md` et
+`agent/skills/recap-rayon.md`.
+
+## HyperFix — visuels adaptatifs
+
+Question libre sur des données : visuel seulement si adapté — skill
+`graphiques-adaptatifs` (max 1 graphique + 1 tableau, 3 visuels jamais dépassés,
+`horizontal_bar` interdit). Question simple = texte seul.
