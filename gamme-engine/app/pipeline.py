@@ -55,6 +55,65 @@ def read_table(path):
     return pd.read_excel(path, sheet_name=config.SHEET_NAME, dtype=str)
 
 
+def _is_int_like(value) -> bool:
+    """Code article valide : entier (101, '101', 101.0, ' 101 ')."""
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return True
+    if isinstance(value, float):
+        return value.is_integer()
+    text = str(value).strip()
+    if not text:
+        return False
+    try:
+        return float(text).is_integer()
+    except ValueError:
+        return False
+
+
+def _is_num_like(value) -> bool:
+    """Même sémantique que db.num : vide/None/NaN = manquant (OK), sinon float()."""
+    if value is None:
+        return True
+    if isinstance(value, float) and value != value:
+        return True
+    text = str(value).strip()
+    if text == '' or text.lower() == 'nan':
+        return True
+    try:
+        float(text)
+        return True
+    except ValueError:
+        return False
+
+
+_NUMERIC_COLS = ["Stock", "Px achat fac", "Px achat tv", "Px revient", "TVA %",
+                 "Marge %", "Marge Promo %", "Couv. ", "Valeur stock   PRMP", "En cours"]
+_DATE_COLS = ["Date Dbt", "Date fin"]
+_DATE_RE = None
+
+
+def _date_ok(value) -> bool:
+    global _DATE_RE
+    if _DATE_RE is None:
+        import re
+        _DATE_RE = re.compile(r"^\d{2}/\d{2}/\d{4}$")
+    if value is None:
+        return True
+    if isinstance(value, float) and value != value:
+        return True
+    from datetime import datetime as _dt
+    if isinstance(value, _dt):
+        return True
+    text = str(value).strip()
+    if text == '' or text.lower() == 'nan':
+        return True
+    return bool(_DATE_RE.match(text))
+
+
 def validate_file(path):
     try:
         df = read_table(path)
