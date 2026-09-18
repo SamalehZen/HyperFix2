@@ -110,20 +110,51 @@ def test_doublon_jour_et_hash(tmp_path, fresh_db):
     p1 = str(tmp_path / "m1.xlsx")
     _write_xlsx(p1, [_row()])
     r1 = mouvements.run_mouvement_import(p1, rayon="frais-surgele")
-    assert r1["ok"] and r1["resume"]["nb_mouvements"] == 1
+    assert r1["ok"] and r1["resume"]["jours_importes"] == ["2026-09-13"]
     r2 = mouvements.run_mouvement_import(p1, rayon="frais-surgele")
     assert r2["ok"] and r2["resume"].get("deja_importe") is True
     p2 = str(tmp_path / "m2.xlsx")
     _write_xlsx(p2, [_row(**{"Qté UC": "6"})])  # même jour, contenu différent
     r3 = mouvements.run_mouvement_import(p2, rayon="frais-surgele")
-    assert not r3["ok"] and "déjà importée" in r3["erreur"]
+    assert r3["ok"] and r3["resume"]["jours_deja"] == ["2026-09-13"]
 
 
-def test_fichier_multi_dates_refuse(tmp_path, fresh_db):
+def test_split_multi_dates(tmp_path, fresh_db):
     p = str(tmp_path / "m.xlsx")
-    _write_xlsx(p, [_row(), _row(Code="2", **{"Date mvt": "14/09/2026"})])
+    _write_xlsx(p, [
+        _row(Code="1", **{"Date mvt": "10/09/2026"}),
+        _row(Code="2", **{"Date mvt": "08/09/2026"}),
+        _row(Code="3", **{"Date mvt": "09/09/2026"}),
+    ])
     res = mouvements.run_mouvement_import(p, rayon="frais-surgele")
-    assert not res["ok"] and "multi-dates" in res["erreur"]
+    assert res["ok"]
+    assert res["resume"]["jours"] == ["2026-09-08", "2026-09-09", "2026-09-10"]
+    assert res["resume"]["jours_importes"] == ["2026-09-08", "2026-09-09", "2026-09-10"]
+    assert res["resume"]["nb_mouvements"] == 3
+    with db.lock_conn() as conn:
+        n = conn.execute("SELECT COUNT(*) FROM mouvement_imports WHERE rayon = 'frais-surgele'").fetchone()[0]
+    assert n == 3
+    # Redépôt exact : tout est déjà importé, zéro doublon.
+    res2 = mouvements.run_mouvement_import(p, rayon="frais-surgele")
+    assert res2["ok"] and res2["resume"].get("deja_importe") is True
+    with db.lock_conn() as conn:
+        n2 = conn.execute("SELECT COUNT(*) FROM mouvements WHERE rayon = 'frais-surgele'").fetchone()[0]
+    assert n2 == 3
+
+
+def test_split_chevauchement_partiel(tmp_path, fresh_db):
+    p1 = str(tmp_path / "m1.xlsx")
+    _write_xlsx(p1, [_row(Code="1", **{"Date mvt": "08/09/2026"})])
+    assert mouvements.run_mouvement_import(p1, rayon="frais-surgele")["ok"]
+    p2 = str(tmp_path / "m2.xlsx")
+    _write_xlsx(p2, [
+        _row(Code="1", **{"Date mvt": "08/09/2026", "Qté UC": "9"}),
+        _row(Code="2", **{"Date mvt": "09/09/2026"}),
+    ])
+    res = mouvements.run_mouvement_import(p2, rayon="frais-surgele")
+    assert res["ok"]
+    assert res["resume"]["jours_deja"] == ["2026-09-08"]
+    assert res["resume"]["jours_importes"] == ["2026-09-09"]
 
 
 def test_annul_sens_suspect_warning(fresh_db):
@@ -150,10 +181,11 @@ def test_import_reel_13_09(tmp_path, fresh_db):
     assert res["ok"], res.get("erreur")
     resume = res["resume"]
     assert resume["jour"] == "2026-09-13"
+    det = resume["details"]["2026-09-13"]
     assert resume["nb_mouvements"] == 379
-    assert resume["nb_articles"] == 356
-    assert resume["familles"].get("vente") == 342
-    assert resume["familles"].get("type_inconnu", 0) == 0
+    assert det["nb_articles"] == 356
+    assert det["familles"].get("vente") == 342
+    assert det["familles"].get("type_inconnu", 0) == 0
     with db.lock_conn() as conn:
         row = conn.execute(
             "SELECT quantite, sens, valeur_fichier FROM mouvements "
@@ -184,7 +216,7 @@ def test_reconciliation_exacte(tmp_path, fresh_db):
         _gamme_jour(conn, "frais-surgele", "2026-09-14", {101: 93})
     res = mouvements.run_mouvement_import(p, rayon="frais-surgele")
     assert res["ok"]
-    assert res["resume"]["reconciliation"]["statut"] == "reconcilié"
+    assert res["resume"]["details"]["2026-09-13"]["reconciliation"]["statut"] == "reconcilié"
     with db.lock_conn() as conn:
         anoms = conn.execute("SELECT * FROM anomalies WHERE type = 'ecart_mouvement'").fetchall()
     assert len(anoms) == 0
@@ -198,7 +230,7 @@ def test_reconciliation_ecart_signale(tmp_path, fresh_db):
         iid14 = _gamme_jour(conn, "frais-surgele", "2026-09-14", {101: 80})  # 93 attendu
     res = mouvements.run_mouvement_import(p, rayon="frais-surgele")
     assert res["ok"]
-    assert res["resume"]["reconciliation"]["nb_ecarts"] == 1
+    assert res["resume"]["details"]["2026-09-13"]["reconciliation"]["nb_ecarts"] == 1
     with db.lock_conn() as conn:
         anoms = conn.execute(
             "SELECT code, description FROM anomalies WHERE type = 'ecart_mouvement' AND import_id = ?",
@@ -212,7 +244,7 @@ def test_reconciliation_sans_gamme(tmp_path, fresh_db):
     _write_xlsx(p, [_row()])
     res = mouvements.run_mouvement_import(p, rayon="frais-surgele")
     assert res["ok"]
-    assert res["resume"]["reconciliation"]["statut"] == "mouvements_sans_gamme"
+    assert res["resume"]["details"]["2026-09-13"]["reconciliation"]["statut"] == "mouvements_sans_gamme"
 
 
 def _gamme_full(conn, rayon, jour, articles):
@@ -240,7 +272,7 @@ def test_ca_promo_exact(tmp_path, fresh_db):
             "code": 15218, "stock": 3559, "px_vente": 1850, "pv_promo": 1600,
             "date_dbt": "10/09/2026", "date_fin": "15/09/2026", "px_revient": 1075.183}])
     res = mouvements.run_mouvement_import(p, rayon="frais-surgele")
-    ind = res["resume"]["indicateurs"]
+    ind = res["resume"]["details"]["2026-09-13"]["indicateurs"]
     assert ind["ca"] == 28800.0
     assert abs(ind["marge_encaissee"] - 9446.71) < 0.02
 
@@ -253,7 +285,7 @@ def test_ca_hors_promo_prix_vente(tmp_path, fresh_db):
             "code": 12982, "stock": 100, "px_vente": 200, "pv_promo": 150,
             "date_dbt": "10/09/2026", "date_fin": "11/09/2026", "px_revient": 100}])
     res = mouvements.run_mouvement_import(p, rayon="frais-surgele")
-    assert res["resume"]["indicateurs"]["ca"] == 400.0
+    assert res["resume"]["details"]["2026-09-13"]["indicateurs"]["ca"] == 400.0
 
 
 def test_dormants_niveaux(tmp_path, fresh_db):
@@ -275,20 +307,20 @@ def test_dormants_niveaux(tmp_path, fresh_db):
     ])
     with db.lock_conn() as conn:
         _gamme_full(conn, "frais-surgele", "2026-09-13", [
-            {"code": 11, "stock": 10, "couv": 30, "px_revient": 100},   # prouvé + caché
+            {"code": 11, "stock": 10, "couv": 30, "px_revient": 100},   # vendu 01/06, trou après → partiel (borne 13/09)
             {"code": 12, "stock": 10, "couv": 30, "px_revient": 100},   # actif
             {"code": 13, "stock": 5, "couv": 999, "px_revient": 50},    # estimé
             {"code": 14, "stock": 7, "couv": 30, "px_revient": 50},     # partiel (jamais vendu)
-            {"code": 15, "stock": 9, "couv": 999, "px_revient": 50},    # faux dormant
+            {"code": 15, "stock": 9, "couv": 999, "px_revient": 50},    # partiel + faux dormant
             {"code": 16, "stock": 0, "couv": 999, "px_revient": 50},    # exclu (stock nul)
         ])
         ind = mouvements.indicateurs_jour(conn, "frais-surgele", "2026-09-13")
     d = ind["dormants"]
-    assert d["nb_prouves"] == 1 and d["top_prouves"][0]["code"] == 11
-    assert d["nb_estimes"] == 1
+    assert d["fenetre"] == {"debut": "2026-09-13", "longueur": 1}
+    assert d["nb_prouves"] == 0 and d["nb_estimes"] == 1
+    assert d["capital_prouve"] == 0.0
     assert len(d["faux_dormants"]) == 1 and d["faux_dormants"][0]["code"] == 15
-    assert len(d["dormants_caches"]) == 1 and d["dormants_caches"][0]["code"] == 11
-    assert d["capital_prouve"] == 1000.0
+    assert d["dormants_caches"] == []
 
 
 def test_prix_delta_et_demarque(tmp_path, fresh_db):
@@ -301,7 +333,114 @@ def test_prix_delta_et_demarque(tmp_path, fresh_db):
     with db.lock_conn() as conn:
         _gamme_full(conn, "frais-surgele", "2026-09-13", [{"code": 21, "stock": 5}])
     res = mouvements.run_mouvement_import(p, rayon="frais-surgele")
-    ind = res["resume"]["indicateurs"]
+    ind = res["resume"]["details"]["2026-09-13"]["indicateurs"]
     assert ind["prix_delta"][0]["code"] == 21 and ind["prix_delta"][0]["delta"] == 40.0
     assert ind["demarque"]["perime"] == {"qte": 3.0, "valeur": 90.0}
     assert ind["demarque"]["casse_rayon"] == {"qte": 2.0, "valeur": 40.0}
+
+
+def _mvt_row(iid, jour, rayon, code, code_mvt="SM", sens="-", qte=1.0, heure="12:00:00"):
+    return (iid, jour, rayon, code, f"ART {code}", "02-001", code_mvt, "lib",
+            {"SM": "vente"}.get(code_mvt, "inventaire"), None, "0",
+            qte, sens, qte if sens == "+" else -qte, 100.0, 100.0 * qte, None,
+            heure, "", None, None, None, None, None, None, None, None, None, None,
+            "f.xlsx", "h")
+
+
+def _jours_consecutifs(conn, rayon, premier, n, code_vendu=None, trous=()):
+    """Importe n jours consécutifs (insert direct, sans Excel)."""
+    from datetime import date, timedelta
+    from app import db as _db
+
+    d0 = date.fromisoformat(premier)
+    for i in range(n):
+        j = (d0 + timedelta(days=i)).isoformat()
+        if j in trous:
+            continue
+        iid = _db.create_mouvement_import(conn, rayon, j, "f.xlsx", f"h{j}", "ok", nb_mouvements=1)
+        rows = []
+        if code_vendu is not None and i == 0:
+            rows.append(_mvt_row(iid, j, rayon, code_vendu))
+        _db.insert_mouvements(conn, iid, rayon, j, rows or
+                              [_mvt_row(iid, j, rayon, 999999, "EI", "+", 0.0)])
+
+
+def test_dormant_prouve_fenetre_complete(fresh_db):
+    # Cas X-2024 : jamais vu sur 91 jours consécutifs → prouvé avec borne.
+    with db.lock_conn() as conn:
+        _jours_consecutifs(conn, "frais-surgele", "2026-06-15", 91, code_vendu=98)
+        _gamme_full(conn, "frais-surgele", "2026-09-13", [
+            {"code": 97, "stock": 4, "couv": 30, "px_revient": 25},   # jamais vu → prouvé
+            {"code": 98, "stock": 2, "couv": 30, "px_revient": 10},   # vendu jour 1 (gap 90) → prouvé
+        ])
+        ind = mouvements.indicateurs_jour(conn, "frais-surgele", "2026-09-13")
+    d = ind["dormants"]
+    assert d["fenetre"] == {"debut": "2026-06-15", "longueur": 91}
+    assert d["nb_prouves"] == 2
+    x = [t for t in d["top_prouves"] if t["code"] == 97][0]
+    assert x["borne_preuve"] == "2026-06-15" and x["dernier_vente"] is None
+    assert d["capital_prouve"] == 120.0
+
+
+def test_dormant_trou_restart(fresh_db):
+    # Trou au milieu : la fenêtre redémarre, pas de preuve sur le trou.
+    with db.lock_conn() as conn:
+        _jours_consecutifs(conn, "frais-surgele", "2026-06-15", 91, trous=("2026-07-30",))
+        _gamme_full(conn, "frais-surgele", "2026-09-13", [
+            {"code": 97, "stock": 4, "couv": 30, "px_revient": 25},
+        ])
+        ind = mouvements.indicateurs_jour(conn, "frais-surgele", "2026-09-13")
+    d = ind["dormants"]
+    assert d["fenetre"] == {"debut": "2026-07-31", "longueur": 45}
+    assert d["nb_prouves"] == 0 and d["nb_estimes"] == 0
+
+
+def test_nouvel_article_informatif(fresh_db):
+    with db.lock_conn() as conn:
+        _gamme_jour(conn, "frais-surgele", "2026-09-13", {101: 10})
+        iid14 = _gamme_jour(conn, "frais-surgele", "2026-09-14", {101: 10, 202: 5})
+        ecarts, _ = mouvements.reconcile_jour(conn, "frais-surgele", "2026-09-13")
+    assert ecarts == []
+    with db.lock_conn() as conn:
+        anoms = conn.execute(
+            "SELECT code, type FROM anomalies WHERE import_id = ?", (iid14,)).fetchall()
+    assert [(a["code"], a["type"]) for a in anoms] == [(202, "nouvel_article")]
+
+
+def test_chevauchement_snapshot(fresh_db):
+    import pandas as pd
+
+    df = pd.DataFrame([
+        _row(Code="301", **{"Code mvt": "RM", "Qté UC": "2", "Heure mvt": "09:35:00"}),
+        _row(Code="302", **{"Qté UC": "2", "Heure mvt": "14:00:00"}),
+    ], columns=COLS)
+    lignes, _ = mouvements.validate_mouvements(df)
+    assert len(lignes) == 2
+    with db.lock_conn() as conn:
+        _gamme_jour(conn, "frais-surgele", "2026-09-13", {301: 10, 302: 10})
+        _gamme_jour(conn, "frais-surgele", "2026-09-14", {301: 10, 302: 10})
+        iid = db.create_mouvement_import(conn, "frais-surgele", "2026-09-13", "f.xlsx",
+                                         "hchev", "ok", nb_mouvements=2)
+        for l in lignes:
+            db.insert_mouvements(conn, iid, "frais-surgele", "2026-09-13",
+                                 [tuple([iid, "2026-09-13", "frais-surgele", l["code"], None, None,
+                                         l["code_mvt"], None, l["type_normalise"], None, None,
+                                         l["quantite"], l["sens"], l["quantite_signee"], None, None, None,
+                                         l["heure_mvt"], None, None, None, None, None, None, None,
+                                         None, None, None, None, "f.xlsx", "hchev"])])
+        ecarts, _ = mouvements.reconcile_jour(conn, "frais-surgele", "2026-09-13")
+    par_code = {e["code"]: e for e in ecarts}
+    assert par_code[301]["chevauchement_snapshot"] is True
+    assert par_code[302]["chevauchement_snapshot"] is False
+
+
+def test_chaine_apres_incoherente_warning(fresh_db):
+    import pandas as pd
+
+    df = pd.DataFrame([
+        _row(**{"Heure mvt": "09:00:00", "Qte. apres  mouvement.": "14"}),
+        _row(**{"Qté UC": "3", "Heure mvt": "14:00:00", "Qte. apres  mouvement.": "5"}),
+    ], columns=COLS)
+    lignes, meta = mouvements.validate_mouvements(df)
+    assert lignes is not None
+    assert any("Chaîne Qte.après incohérente" in w for w in meta["avertissements"])
