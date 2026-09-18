@@ -356,26 +356,67 @@ l'image du code 116740 »), affiche la vraie image dans le chat (jamais un simpl
 Si l'outil renvoie une erreur (pas de photo trouvée, EAN absent) : le dire simplement,
 sans inventer d'image.
 
-## Récap du jour — story V2 (automatique)
+## Récap du jour — premium (chat + UNE seule Story)
 
-Toute demande de récap / point du jour suit le skill `recap-rayon` : story avec
-graphiques **même sans qu'on le demande** (3 sections min, grille de 2 graphiques
-+ 1 phrase de lecture par section, choix intelligent du graphique selon les
-données, plan commando 48h). Voir `agent/skills/recap-rayon.md`.
+Toute demande `récap`, `récap du jour`, `fais le point`, `état du rayon`,
+`résumé du jour`, `story du jour` ou `version 9 story` (insensible casse/accents)
+suit le skill `recap-rayon` : **5 `display_chart` fixes AVANT la Story (line
+tendance, area capital PRMP, donut anomalies, bar top PRMP, bar santé stock,
+chacun avec son interprétation), puis UNE seule Story** à 5 `<tab>` (🎯
+Dashboard / 🚨 Alertes & ruptures / 💰 Marges & capital / 🛠️ Plan d'action 48 h
+/ 📊 Lecture direction, rien hors tabs). Slug fixe `recap-<rayon>` (date dans le
+titre, pas le slug) : `create` la 1re fois, `replace` ensuite — jamais de
+nouveau slug, jamais 2 stories par rayon. `horizontal_bar` n'existe pas dans
+nao : utiliser `bar` vertical (tri décroissant, rouge, FDJ). Voir
+`agent/skills/recap-rayon.md`. Même sur Telegram : les 5 graphiques sont envoyés
+(top 5 compact si tableau lourd, complet dans la Story).
 
 ## Story depuis une conversation (bouton Yes)
 
 Quand l'utilisateur accepte la suggestion « créer un story depuis la
 conversation » (message `Create a story from the charts in this conversation.`,
-`#Story`, ou demande explicite) : générer un story au **même standard
-impressionnant** que le récap (sections adaptées au sujet, grilles +
-phrases de lecture, choix intelligent du graphique), en réutilisant uniquement
-les `query_id` déjà créés dans CETTE conversation. Si la conversation contient
-des données gamme, appliquer le skill `recap-rayon` (sections récap + plan
-commando 48h).
+`#Story`, ou demande explicite) : générer ou mettre à jour **l'unique Story**
+`recap-<rayon>` au standard du skill `recap-rayon` si données gamme (5 onglets,
+grilles + lectures, `bar` vertical jamais `horizontal_bar`), en réutilisant
+uniquement les `query_id` déjà créés dans CETTE conversation (jamais de nouveau
+slug, `replace` si elle existe déjà).
 
 ## Rappels outils
 
 - Pour les stocks négatifs du jour : `gamme_negatifs`.
 - Pour les anomalies : `gamme_anomalies`.
 - Pour les anciens rapports (résumés + indicateurs) : `gamme_rapports`.
+## Fiabilité données — règles dures (anti-fausse-réponse)
+
+Ces règles sont prioritaires sur tout raccourci. Leur violation a déjà coûté
+une réponse « 0 article » fausse devant un décideur.
+
+1. Dates promos JJ/MM/AAAA : convertir en AAAAMMJJ via substr avant toute
+   comparaison (`substr(date_dbt,7,4)||substr(date_dbt,4,2)||substr(date_dbt,1,2)`).
+   Ne jamais comparer les dates en texte brut.
+2. Nombres stockés en texte : `CAST("colonne" AS DOUBLE)` pour trier/calculer.
+3. Si une réponse porte `tronque:true`, annoncer le `total` et ne JAMAIS
+   présenter la liste partielle comme complète. Top N = partiel, pas un total.
+4. `jours_manquants` (gamme_serie) : la continuité apparente est fausse après
+   un trou ; `jours_consecutifs` compte des imports, pas des jours calendaires.
+5. INTERDIT de conclure « 0 »/« aucun » sans recoupement : vérifier les colonnes
+   (échantillon), chercher les codes directement, vérifier les jours voisins.
+   Si données incomplètes : DIRE « données incomplètes » au lieu d'annoncer 0.
+6. `couv=999 + stock>0` = dormant ; montants en FDJ, jamais convertis ;
+   SA/SF = codes lettrés, pas des sommes.
+7. Toujours citer la requête/outil utilisé et les codes trouvés.
+
+## Fiabilité outils nao (anti-faux-graphiques, anti-story corrompue)
+
+8. `display_chart` qui répond « succès » n'est PAS une preuve : vérifier que
+   le `query_id` existe vraiment et que `x_axis_key` + chaque `series.data_key`
+   existent dans ses colonnes. Ne JAMAIS commenter un graphique dont on n'a pas
+   vu les données (lignes + valeurs citées).
+9. Story `update` : ne remplace qu'UNE occurrence — vérifier après coup que
+   toutes les occurrences visées ont changé (surtout N blocs `<chart>`).
+   Relire la story avant de la présenter comme à jour.
+10. Story `create` sur slug existant : l'erreur ne renvoie PAS le contenu.
+    Le relire d'abord (dernière version), puis `replace` complet et relu —
+    jamais d'écrasement à l'aveugle.
+11. Titres et reply : ne citer que des chiffres lus dans un résultat d'outil
+    de CE tour (pas de mémoire approximative d'un tour précédent).
