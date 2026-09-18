@@ -313,8 +313,9 @@ récemment) et **dormants cachés** (`couv<999` mais 0 vente depuis 3 mois).
 4. Multi-rayons : chaque rayon a-t-il son propre fichier mouvements ? Si oui,
    comment rattacher le fichier au rayon (préfixe `Classification 02-...`,
    nom de fichier, sous-dossier de dépôt) ? Périmètre initial = frais-surgele.
-5. Périmètre backfill : tout le contenu vérifié (30/07→10/09 + 11/09) ou
-   restreint à 07/08→11/09 (annoncé par l'utilisateur) ?
+5. Périmètre backfill : ~~tout le contenu vérifié (30/07→10/09 + 11/09) ou
+   restreint à 07/08→11/09 (annoncé par l'utilisateur) ?~~ → **RÉSOLU
+   2026-09-18 : TOUT, 30/07→11/09** (13/09 déjà en prod, sauté auto).
 
 ## 10. Exécution A+B+C (2026-09-18, 10 commits)
 
@@ -343,12 +344,16 @@ récemment) et **dormants cachés** (`couv<999` mais 0 vente depuis 3 mois).
 - **Backfill planifié** : ~90 dates consécutives, table de couverture
   gamme ✓/✗ × mouvements ✓/✗, trous = restart de fenêtre, dormants pleine
   puissance sans ancienne gamme. Fichier annoncé pour demain.
-- **Règle dormants trailing window EN ATTENTE d'implémentation** : jamais-vu +
-  fenêtre 90 j complète → prouvé (« pas vu depuis le … ») ; trou = pas de
-  preuve. Fix ciblé `_dormants` + 2 tests (« go fix dormants »).
-- **Mécanisme minuit documenté (§2ter)** : SM = batch 23:59:50 (ventes J),
-  autres = temps réel, gamme exportée 9h-10h → écarts temps réel 09:00-10:00 =
-  « chevauchement snapshot probable » (informatif) ; `20/21` → `inutilise`.
+- **Règle dormants trailing window IMPLÉMENTÉE** : jamais-vu +
+  fenêtre 90 j complète → prouvé (« pas vu depuis le … ») ; trou = restart
+  (jamais de preuve sur un trou) ; `_trailing_run` + tests (fenêtre 91 j,
+  trou, jamais-vu).
+- **Mécanisme minuit appliqué** : écarts temps réel 09:00-10:00 taggés
+  « chevauchement snapshot probable » (informatif) ; `nouvel_article`
+  informatif (assortiment) au lieu d'écart ; `20/21` → `inutilise`.
+- **Split multi-dates IMPLÉMENTÉ** : grouper par `Date mvt` → chrono → même
+  traitement par jour ; jours déjà importés sautés ; redépôt exact converge ;
+  reprise après jour en erreur ; script `backfill_mouvements.sh`.
 - **Fichiers backfill reçus et analysés** (sans modification) : 43 jours
   consécutifs 30/07→10/09 (15 685 lignes, 16 codes observés) + 11/09
   (434 lignes) → fenêtre max 44 j (trou 12/09), dormants partiels au mieux.
