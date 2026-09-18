@@ -85,12 +85,16 @@ services:
             - ./docs/rapports:/rapports:ro
             - ./docs/etiquettes:/etiquettes:ro
             - ./docs/images:/images:ro
+            - ./docs/exports:/exports:ro
             - caddy_config:/config
             - caddy_data:/data
         extra_hosts:
             - 'host.docker.internal:host-gateway'
         depends_on:
             - nao
+        networks:
+            - default
+            - hyperfix-net
         restart: unless-stopped
 
     gamme-engine:
@@ -138,3 +142,7 @@ volumes:
     nao_gamme_postgres_data:
     caddy_config:
     caddy_data:
+
+networks:
+    hyperfix-net:
+        external: true
