@@ -175,12 +175,16 @@ CREATE INDEX idx_mouvements_code_mvt ON mouvements(code_mvt, jour);
     date_import TEXT NOT NULL, fichier_source TEXT NOT NULL,
     archive_path TEXT, hash_sha256 TEXT NOT NULL,
     nb_mouvements INTEGER NOT NULL, statut TEXT NOT NULL, message TEXT,
+    nb_mouvements INTEGER NOT NULL, statut TEXT NOT NULL, message TEXT,
+    resume_json TEXT,
     UNIQUE(rayon, jour)
   );
   CREATE INDEX idx_mouvement_imports_hash ON mouvement_imports(rayon, hash_sha256);
   ```
   Dedup par hash + unicité (rayon, jour) : un 2e fichier du même jour = refusé.
   La table `imports` (gamme) n'est JAMAIS touchée par le flux mouvements.
+  Table `mouvements` : comme §5bis + colonnes `import_id` (lien import) et
+  `sous_type` (détail famille) ; table `mouvement_imports` + colonne `resume_json`.
 
 ## 6. Lots d'exécution
 

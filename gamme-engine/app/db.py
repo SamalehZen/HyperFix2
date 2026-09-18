@@ -93,6 +93,45 @@ CREATE TABLE IF NOT EXISTS rapports (
     resume_json TEXT,
     created_at TEXT
 );
+CREATE TABLE IF NOT EXISTS mouvement_imports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rayon TEXT NOT NULL,
+    jour TEXT NOT NULL,
+    date_import TEXT NOT NULL,
+    fichier_source TEXT NOT NULL,
+    archive_path TEXT,
+    hash_sha256 TEXT NOT NULL,
+    nb_mouvements INTEGER NOT NULL,
+    statut TEXT NOT NULL,
+    message TEXT,
+    resume_json TEXT,
+    UNIQUE(rayon, jour)
+);
+CREATE TABLE IF NOT EXISTS mouvements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    import_id INTEGER NOT NULL,
+    jour TEXT NOT NULL,
+    rayon TEXT NOT NULL,
+    code INTEGER NOT NULL,
+    libelle TEXT, classification TEXT,
+    code_mvt TEXT NOT NULL,
+    libelle_mvt TEXT, type_normalise TEXT,
+    sous_type TEXT,
+    document TEXT,
+    quantite REAL NOT NULL, sens TEXT NOT NULL, quantite_signee REAL NOT NULL,
+    prmp REAL, valeur_fichier REAL, stock_apres REAL,
+    heure_mvt TEXT, heure_creation TEXT,
+    dernier_pr REAL, dernier_pamp REAL, dernier_pa REAL,
+    stock_physique REAL,
+    date_dernier_comptage TEXT, qte_dernier_comptage REAL,
+    date_dernier_inv TEXT, qte_dernier_inv REAL,
+    date_derniere_entree TEXT, date_derniere_sortie TEXT,
+    fichier_source TEXT NOT NULL, hash_sha256 TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_mouvement_imports_hash ON mouvement_imports(rayon, hash_sha256);
+CREATE INDEX IF NOT EXISTS idx_mouvements_jour_code ON mouvements(jour, code);
+CREATE INDEX IF NOT EXISTS idx_mouvements_type_jour ON mouvements(type_normalise, jour);
+CREATE INDEX IF NOT EXISTS idx_mouvements_code_mvt ON mouvements(code_mvt, jour);
 """
 
 
@@ -285,6 +324,75 @@ def set_import_statut(conn, import_id, statut, message=None):
         "UPDATE imports SET statut = ?, message = ? WHERE id = ?",
         (statut, message, import_id),
     )
+
+
+def create_mouvement_import(conn, rayon, jour, fichier_source, hash_sha256, statut,
+                            message="", nb_mouvements=0, archive_path=None, resume=None):
+    cur = conn.execute(
+        "INSERT INTO mouvement_imports (rayon, jour, date_import, fichier_source, archive_path, hash_sha256, nb_mouvements, statut, message, resume_json) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (rayon, jour, datetime_now(), fichier_source, archive_path, hash_sha256,
+         nb_mouvements, statut, message,
+         json.dumps(resume, ensure_ascii=False) if resume is not None else None),
+    )
+    return cur.lastrowid
+
+
+def mouvement_import_by_hash(conn, h, rayon):
+    row = conn.execute(
+        "SELECT id, statut, resume_json FROM mouvement_imports "
+        "WHERE hash_sha256 = ? AND rayon = ? ORDER BY id DESC LIMIT 1",
+        (h, rayon),
+    ).fetchone()
+    if row is None:
+        return None
+    return row["id"], row["statut"], row["resume_json"]
+
+
+def set_mouvement_import_statut(conn, import_id, statut, message=None, resume=None):
+    if resume is None:
+        conn.execute(
+            "UPDATE mouvement_imports SET statut = ?, message = ? WHERE id = ?",
+            (statut, message, import_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE mouvement_imports SET statut = ?, message = ?, resume_json = ? WHERE id = ?",
+            (statut, message, json.dumps(resume, ensure_ascii=False), import_id),
+        )
+
+
+def insert_mouvements(conn, import_id, rayon, jour, rows):
+    conn.executemany(
+        "INSERT INTO mouvements "
+        "(import_id, jour, rayon, code, libelle, classification, code_mvt, libelle_mvt, "
+        "type_normalise, sous_type, document, quantite, sens, quantite_signee, prmp, "
+        "valeur_fichier, stock_apres, heure_mvt, heure_creation, dernier_pr, dernier_pamp, "
+        "dernier_pa, stock_physique, date_dernier_comptage, qte_dernier_comptage, "
+        "date_dernier_inv, qte_dernier_inv, date_derniere_entree, date_derniere_sortie, "
+        "fichier_source, hash_sha256) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        rows,
+    )
+
+
+def get_gamme_import_for_jour(conn, rayon, jour):
+    """Import gamme ok/baseline d'un jour (pour réconciliation). None si absent."""
+    row = conn.execute(
+        "SELECT id FROM imports WHERE rayon = ? AND jour = ? AND statut IN ('ok','baseline') "
+        "ORDER BY id DESC LIMIT 1",
+        (rayon, jour),
+    ).fetchone()
+    return row["id"] if row else None
+
+
+def get_gamme_stock_map(conn, import_id):
+    rows = conn.execute(
+        "SELECT code, stock, px_vente, pv_promo, date_dbt, date_fin, px_revient "
+        "FROM article_history WHERE import_id = ?",
+        (import_id,),
+    ).fetchall()
+    return {r["code"]: dict(r) for r in rows}
 
 
 def datetime_now():
