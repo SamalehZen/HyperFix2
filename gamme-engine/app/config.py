@@ -1,5 +1,7 @@
 import json
 import os
+import re
+import unicodedata
 
 BASE_URL = os.getenv("OPENCODE_BASE_URL") or "https://api.experientiallabs.ai/v1"
 API_KEY = os.getenv("OPENCODE_API_KEY") or ""
