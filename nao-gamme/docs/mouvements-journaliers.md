@@ -1,11 +1,8 @@
 # Mouvements journaliers — contexte complet + plan HyperFix2 V2
 
-Date : 2026-09-18. Statut : SPÉC FIGÉE (mapping 58 codes verrouillé, point 6
-dormants prouvés) — exécution phasée : **A+B+C autorisés (lots 1+3, dashboard
-intact garanti), D+E (lots 4-5) INTERDITS jusqu'à nouvel ordre**.
-Décisions 2026-09-18 : même `depot/<rayon>/` + routage par nom ;
-table `mouvement_imports` séparée (zéro risque gamme) ;
-import réel du 13/09 en prod (copie, original `/root` intact) dès lot 1 validé.
+Date : 2026-09-18. Statut : PHASES A+B+C TERMINÉES ET VÉRIFIÉES EN PROD
+(lots 1+3, voir §10) — D+E (lots 4-5) INTERDITS jusqu'à nouvel ordre,
+backfill 90 jours en attente du fichier (annoncé pour demain).
 Fichier source : `/root/Stock_DetailMouvement (93).xlsx` (ne pas déplacer : référence d'analyse).
 Projet : `/opt/HyperFix2` (moteur `gamme-engine`, app `nao-gamme`). Base : `/storage/gamme/historique.db`.
 
@@ -271,7 +268,7 @@ récemment) et **dormants cachés** (`couv<999` mais 0 vente depuis 3 mois).
 - Rappel : `/root/GAMME COMPLET (1).zip` + 4 xlsx = anciennes gammes déjà
   importées (pas de mouvements dedans).
 
-## 9. Questions ouvertes (mapping : tout résolu 2026-09-18 — OF/OG/OH/OX/OJ/ET/ST/25/26/36 inutilisés, 35=cession repas, 40/45=cessions, transfert supprimé, OX=coquille sans impact)
+## 9. Questions ouvertes (mapping : tout résolu 2026-09-18 — OF/OG/OH/OX/OJ/ET/ST/25/26/36 inutilisés, 35=cession repas, 40/45=cessions, transfert supprimé, OX=coquille sans impact ; dépôt : même `depot/<rayon>/` + routage par nom — RÉSOLU)
 
 1. Dépôt des mouvements : ~~même dossier `depot/<rayon>/` avec routage par nom,
    ou nouveau sous-dossier `depot/<rayon>/mouvements/` ?~~ → **RÉSOLU
@@ -284,3 +281,34 @@ récemment) et **dormants cachés** (`couv<999` mais 0 vente depuis 3 mois).
 4. Multi-rayons : chaque rayon a-t-il son propre fichier mouvements ? Si oui,
    comment rattacher le fichier au rayon (préfixe `Classification 02-...`,
    nom de fichier, sous-dossier de dépôt) ? Périmètre initial = frais-surgele.
+
+## 10. Exécution A+B+C (2026-09-18, 10 commits)
+
+- **Phase A** : config (`MOUVEMENT_*`, `DORMANT_JOURS`), `types_mouvements.json`
+  (58 codes), tables `mouvements`+`mouvement_imports`, module `mouvements.py`,
+  routeur watcher/API/MCP, `import_mouvements.sh`, 20 tests (synthétiques +
+  réel 13/09). Suite : **61/61** (41 baseline + 20), zéro régression.
+- **Phase B** : `reconcile_jour` + `ecart_mouvement` + couverture
+  (`mouvements_sans_gamme` / `gamme_j/gamme_j1_manquante`).
+- **Phase C** : `indicateurs_jour` (CA, marge, rotation, démarque, prix Δ,
+  promo, dormants + niveaux + faux/cachés).
+- **Prod 13/09** (copie, original `/root` intact, via watcher) : 379/356,
+  CA 1 670 520, marge 534 585,51, dormants 0/460/316, 15218 CA 28 800.
+  **1 écart** : 18702 (+1 : attendu 10, constaté 11 — chaîne mouvements
+  14→11 cohérente avec gamme 14/09, départ décalé d'1) → réconciliation
+  99,99 %, moteur healthy après rebuild.
+- **Incidents + fixes** : `main.py:116` fusionnée (SyntaxError au boot →
+  réparé, rebuilé, healthy ; tests ne couvraient pas `main.py`) ; PRMP doublé
+  (accès positionnel + warning d'écart) ; `continue` qui sautait le contrôle
+  prix (remonté en tête de boucle) ; INSERT auto-cohérent (assert arités).
+- **Décision fichier unique 90 jours** (2026-09-18) : la garde « multi-dates
+  refusé » devient un **split par jour** (grouper par `Date mvt`, ordre chrono,
+  même traitement par jour, jours déjà importés sautés, hash anti-redépôt,
+  TOTAL exclus). À coder au backfill — aucun changement de schéma requis
+  (`UNIQUE(rayon, jour)` déjà prévu).
+- **Backfill planifié** : ~90 dates consécutives, table de couverture
+  gamme ✓/✗ × mouvements ✓/✗, trous = restart de fenêtre, dormants pleine
+  puissance sans ancienne gamme. Fichier annoncé pour demain.
+- **Règle dormants trailing window EN ATTENTE d'implémentation** : jamais-vu +
+  fenêtre 90 j complète → prouvé (« pas vu depuis le … ») ; trou = pas de
+  preuve. Fix ciblé `_dormants` + 2 tests (« go fix dormants »).
