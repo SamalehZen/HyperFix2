@@ -58,6 +58,21 @@ FALLBACK_SCORE_SEUIL = float(os.getenv("GAMME_FALLBACK_SCORE_SEUIL", "30"))
 CHUTE_SEUIL = int(os.getenv("GAMME_CHUTE_SEUIL", "200"))
 HAUSSE_SEUIL = int(os.getenv("GAMME_HAUSSE_SEUIL", "200"))
 
+# Mouvements journaliers (film du rayon) — lots 1+3. Même modèle que la gamme :
+# comportement par variables d'environnement, jamais en dur.
+MOUVEMENT_SHEET = os.getenv("MOUVEMENT_SHEET", "sheet1")
+MOUVEMENT_FILE_HINT = "detailmouvement"  # comparé sans accents/casse/espaces
+MOUVEMENT_REQUIRED_COLUMNS = [
+    "Code", "Libellé", "Classification", "Code mvt", "Libellé mvt",
+    "Document d'origine", "Qté UC", "PRMP", "Valeur", "Sens",
+    "Qte. apres  mouvement.", "Date mvt", "Heure mvt", "Date création",
+    "Heure création", "PRMP", "Dernier PR", "Dernier PAMP", "Dernier PA",
+    "Q Phys.  Stock", "Date der. compt.", "Q der.  compt.",
+    "Date der. inv. compt.", "Q der. inv.  compt.", "Date der. entrée",
+    "Date der. sortie",
+]
+DORMANT_JOURS = int(os.getenv("DORMANT_JOURS", "90"))
+
 
 def load_rayons():
     default = {"epicerie-salee": {"libelle": "Épicerie salée", "gestionnaire": ""}}
