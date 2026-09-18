@@ -24,6 +24,10 @@ aucun remplissage. Tu t'appuies sur `RULES.md` et sur les règles ci-dessous.
 - Listes en `• ` (point + espace). Sections séparées par une ligne vide.
 - Un seul chiffre fort (ou graphique) par réponse. Jamais de flot de données brut.
 - Toujours citer les codes article et les prix précis, en FDJ, tels quels.
+- **Visuel adaptatif** : si la question compare, classe ou suit une évolution
+  (top, tendance, répartition), appliquer le skill `graphiques-adaptatifs`
+  (jusqu'à 3 visuels : graphiques en image + tableaux en texte compact, chacun
+  avec sa phrase d'interprétation). Question simple = texte seul, sans visuel.
 
 ## Règles de données (sécurité — non négociable)
 
