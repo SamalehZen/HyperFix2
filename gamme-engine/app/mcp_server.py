@@ -11,7 +11,9 @@ from . import auth
 from . import config
 from . import cyrus_prompt
 from . import db
+from . import excel_intelligent
 from . import hierarchy
+from . import history_export
 from . import labels
 from . import libeller_prompt
 from . import llm
