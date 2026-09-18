@@ -6,6 +6,7 @@ Endpoints publics (même modèle de confiance que les rapports statiques) :
 """
 from datetime import datetime, timedelta
 import json
+import os
 import re
 
 from fastapi import APIRouter
@@ -391,10 +392,11 @@ def story_jour(jour: str, rayon: str = config.RAYON):
     return JSONResponse(data)
 
 
-# Seuils d'alertes mouvements (Q3 validée : défauts modifiables ici).
-ALERTE_ECART_QTE = 50
-ALERTE_ECART_VALEUR = 10000
-ALERTE_CESSION_VALEUR = 20000
+# Seuils d'alertes mouvements (Q3 validée : modifiables par env, mêmes défauts).
+# Changement sans toucher au code : variable dans nao-gamme/.env + restart moteur.
+ALERTE_ECART_QTE = int(os.getenv("ALERTE_ECART_QTE", "50"))
+ALERTE_ECART_VALEUR = float(os.getenv("ALERTE_ECART_VALEUR", "10000"))
+ALERTE_CESSION_VALEUR = float(os.getenv("ALERTE_CESSION_VALEUR", "20000"))
 
 
 def _resume_mouvement(conn, rayon, jour):

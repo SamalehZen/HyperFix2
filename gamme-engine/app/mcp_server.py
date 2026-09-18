@@ -19,6 +19,7 @@ from . import libeller_prompt
 from . import llm
 from . import mouvements
 from . import normalize
+from . import story_api
 from . import pipeline
 from . import query
 
@@ -1262,3 +1263,214 @@ def gamme_structure_articles(libelles: str = None, fichier: str = None) -> str:
         ensure_ascii=False,
         indent=2,
     )
+
+
+def _mouvement_resume_markdown(jour, rayon, resume) -> str:
+    ind = (resume or {}).get("indicateurs") or {}
+    if not isinstance(ind, dict) or "ca" not in ind:
+        return f"Pas d'indicateurs pour {rayon} le {jour}."
+    lignes = [
+        f"Film du {jour} ({rayon}) : CA encaissé **{ind.get('ca', 0):,.0f} FDJ**, "
+        f"marge **{ind.get('marge_encaissee', 0):,.0f} FDJ** ({ind.get('marge_pct')} %), "
+        f"{ind.get('nb_articles_vendus', 0)} articles vendus.".replace(",", " "),
+    ]
+    top = (ind.get("top_ventes") or [])[:3]
+    if top:
+        lignes.append("Top ventes : " + ", ".join(
+            f"{t['code']} ({t['qte']} pcs, {t['ca']:,.0f} FDJ)".replace(",", " ") for t in top) + ".")
+    dem = ind.get("demarque") or {}
+    if dem:
+        lignes.append("Démarque connue : " + ", ".join(
+            f"{k} {v.get('qte')} pcs" for k, v in dem.items()) + ".")
+    dor = ind.get("dormants") or {}
+    if dor:
+        lignes.append(
+            f"Dormants : {dor.get('nb_prouves', 0)} prouvés, {dor.get('nb_partiels', 0)} partiels, "
+            f"{dor.get('nb_estimes', 0)} estimés (ne jamais présenter un partiel/estimé comme prouvé).")
+    rec = (resume or {}).get("reconciliation") or {}
+    if rec.get("nb_ecarts"):
+        lignes.append(f"Réconciliation : {rec['nb_ecarts']} écart(s) inexpliqué(s).")
+    return "\n".join(lignes)
+
+
+@mcp.tool()
+def gamme_mouvements(rayon: str, jour: str = "") -> str:
+    """Film d'une journée du rayon : ventes, CA et marge ENCAISSÉS, top ventes,
+    familles, démarque, livraisons, prix d'achat qui bougent, dormants prouvés,
+    écarts, réconciliation. jour = YYYY-MM-DD (défaut : dernier jour avec
+    mouvements). Jour sans fichier → erreur honnête (jamais de zéros inventés).
+    Rappel : la colonne Valeur du fichier = coût PRMP, jamais du CA ; SM =
+    ventes (batch minuit) ; niveaux dormants prouvé/partiel/estimé."""
+    _guard_rayon(rayon)
+    with db.lock_conn() as conn:
+        if not jour:
+            row = conn.execute(
+                "SELECT MAX(jour) AS j FROM mouvement_imports WHERE rayon = ? AND statut = 'ok'",
+                (rayon,)).fetchone()
+            jour = row["j"] if row else ""
+        if not jour:
+            return json.dumps(
+                {"success": False,
+                 "erreur": f"Aucun mouvement importé pour {rayon}. Dépose un fichier Stock_DetailMouvement dans le chat."},
+                ensure_ascii=False)
+        resume = story_api._resume_mouvement(conn, rayon, jour)
+        if resume is None:
+            return json.dumps(
+                {"success": False,
+                 "erreur": f"Pas de mouvements pour {rayon} le {jour} (jour sans fichier : ce n'est PAS 0 vente)."},
+                ensure_ascii=False)
+        familles = story_api._familles_mouvements(conn, rayon, jour)
+        ecarts = story_api._ecarts_mouvements(conn, rayon, jour)
+        alertes = story_api._alertes_mouvements(conn, rayon, jour, resume)
+    return json.dumps(
+        {"success": True, "rayon": rayon, "jour": jour, "resume": resume,
+         "familles": familles, "ecarts": ecarts, "alertes": alertes,
+         "resume_markdown": _mouvement_resume_markdown(jour, rayon, resume)},
+        ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def gamme_mouvements_serie(rayon: str, date_debut: str = "", date_fin: str = "") -> str:
+    """Série des journées avec mouvements : CA, marge, articles vendus par jour,
+    PLUS jours_disponibles et trous (jours calendaires sans fichier entre le
+    premier et le dernier jour). Pour toute évolution/tendance/comparaison —
+    ne pas interroger jour par jour. Un trou n'est jamais comblé : la preuve
+    (ex. dormants) redémarre après chaque trou."""
+    _guard_rayon(rayon)
+    if date_debut and not re.match(r"^\d{4}-\d{2}-\d{2}$", date_debut):
+        return json.dumps({"success": False, "erreur": "date_debut au format YYYY-MM-DD."},
+                          ensure_ascii=False)
+    if date_fin and not re.match(r"^\d{4}-\d{2}-\d{2}$", date_fin):
+        return json.dumps({"success": False, "erreur": "date_fin au format YYYY-MM-DD."},
+                          ensure_ascii=False)
+    with db.lock_conn() as conn:
+        q = ("SELECT jour, resume_json FROM mouvement_imports "
+             "WHERE rayon = ? AND statut = 'ok' AND resume_json IS NOT NULL")
+        args = [rayon]
+        if date_debut:
+            q += " AND jour >= ?"
+            args.append(date_debut)
+        if date_fin:
+            q += " AND jour <= ?"
+            args.append(date_fin)
+        q += " ORDER BY jour"
+        serie, tot_ca, tot_marge = [], 0.0, 0.0
+        for r in conn.execute(q, args).fetchall():
+            try:
+                ind = (json.loads(r["resume_json"]) or {}).get("indicateurs") or {}
+            except ValueError:
+                continue
+            if not isinstance(ind, dict) or "ca" not in ind:
+                continue
+            serie.append({"jour": r["jour"], "ca": ind.get("ca", 0),
+                          "marge": ind.get("marge_encaissee", 0),
+                          "articles": ind.get("nb_articles_vendus", 0),
+                          "mouvements": (json.loads(r["resume_json"]) or {}).get("nb_mouvements", 0)})
+            tot_ca += ind.get("ca", 0) or 0
+            tot_marge += ind.get("marge_encaissee", 0) or 0
+    if not serie:
+        return json.dumps(
+            {"success": False, "erreur": f"Aucun mouvement importé pour {rayon} sur la période."},
+            ensure_ascii=False)
+    jours = [p["jour"] for p in serie]
+    trous = []
+    try:
+        from datetime import date as _date, timedelta as _td
+        have = set(jours)
+        day, last = _date.fromisoformat(jours[0]), _date.fromisoformat(jours[-1])
+        while day <= last:
+            iso = day.strftime("%Y-%m-%d")
+            if iso not in have:
+                trous.append(iso)
+            day += _td(days=1)
+    except ValueError:
+        pass
+    lignes = [
+        f"Série mouvements {rayon} : {len(serie)} jours ({jours[0]} → {jours[-1]}), "
+        f"CA cumulé **{tot_ca:,.0f} FDJ**, marge **{tot_marge:,.0f} FDJ**.".replace(",", " "),
+    ]
+    if trous:
+        lignes.append(f"Trous sans fichier ({len(trous)}) : {', '.join(trous[:10])}"
+                      + ("…" if len(trous) > 10 else "") + " — continuité non garantie.")
+    best = max(serie, key=lambda p: p["ca"])
+    lignes.append(f"Meilleur jour : {best['jour']} ({best['ca']:,.0f} FDJ).".replace(",", " "))
+    return json.dumps(
+        {"success": True, "rayon": rayon, "nb_jours": len(serie), "serie": serie,
+         "jours_disponibles": jours, "trous": trous,
+         "ca_total": round(tot_ca, 2), "marge_totale": round(tot_marge, 2),
+         "resume_markdown": "\n".join(lignes)},
+        ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def gamme_mouvements_article(rayon: str, code: int) -> str:
+    """Film complet d'un article : ventes par jour, 10 derniers mouvements
+    (type, quantité, sens, heure, document), snapshot gamme actuel (stock,
+    prix, couv), statut dormant avec preuve (jamais inventée).
+    Stock ACTUEL ou prix facial ? Utilise gamme_article/gamme_query à la
+    place — cet outil raconte le FILM (mouvements), pas la PHOTO."""
+    _guard_rayon(rayon)
+    with db.lock_conn() as conn:
+        ventes = [dict(r) for r in conn.execute(
+            "SELECT jour, COALESCE(SUM(quantite_signee), 0) AS qte_nette, COUNT(*) AS lignes "
+            "FROM mouvements WHERE rayon = ? AND code = ? AND type_normalise = 'vente' "
+            "GROUP BY jour ORDER BY jour", (rayon, code)).fetchall()]
+        derniers = [dict(r) for r in conn.execute(
+            "SELECT jour, code_mvt, libelle_mvt, type_normalise, quantite, sens, heure_mvt, "
+            "document, stock_apres FROM mouvements WHERE rayon = ? AND code = ? "
+            "ORDER BY jour DESC, heure_mvt DESC LIMIT 10", (rayon, code)).fetchall()]
+        snap = conn.execute(
+            "SELECT h.jour, h.stock, h.px_vente, h.pv_promo, h.date_dbt, h.date_fin, "
+            "h.px_revient, h.couv, h.libelle FROM article_history h JOIN imports i ON i.id = h.import_id "
+            "WHERE h.code = ? AND i.rayon = ? ORDER BY h.jour DESC LIMIT 1",
+            (code, rayon)).fetchone()
+        snap = dict(snap) if snap else None
+        dernier_sm = conn.execute(
+            "SELECT MAX(jour) AS d FROM mouvements WHERE rayon = ? AND code = ? "
+            "AND type_normalise = 'vente'", (rayon, code)).fetchone()["d"]
+        jours_data = sorted({r["jour"] for r in conn.execute(
+            "SELECT DISTINCT jour FROM mouvements WHERE rayon = ?", (rayon,)).fetchall()})
+    if not derniers and snap is None:
+        return json.dumps(
+            {"success": False, "erreur": f"Article {code} inconnu (ni mouvements, ni gamme) pour {rayon}."},
+            ensure_ascii=False)
+    statut, preuve = "inconnu", None
+    stock = (snap or {}).get("stock")
+    if stock is not None and stock <= 0:
+        statut, preuve = "stock_nul", "stock nul : exclu des dormants"
+    else:
+        try:
+            from datetime import date as _date
+            jour_ref = max([dernier_sm] + ([snap["jour"]] if snap else [])) if dernier_sm or snap else None
+            debut, run = (None, 0)
+            if jour_ref:
+                debut, run = mouvements._trailing_run([d for d in jours_data if d <= jour_ref], jour_ref)
+            seuil = int(config.DORMANT_JOURS)
+            if jour_ref is None:
+                pass
+            elif dernier_sm is not None and (debut is None or dernier_sm >= debut):
+                gap = (_date.fromisoformat(jour_ref) - _date.fromisoformat(dernier_sm)).days
+                statut = "prouve" if gap >= seuil else ("actif" if gap == 0 else "partiel")
+                preuve = f"dernière vente le {dernier_sm} ({gap} j)"
+            elif run >= seuil:
+                statut = "prouve"
+                preuve = f"pas de vente depuis le {debut} (fenêtre {run} j)"
+            elif dernier_sm is None and ((snap or {}).get("couv") or 0) == 999:
+                statut = "estime"
+                preuve = "couv 999 sans historique de vente"
+            else:
+                statut = "partiel"
+                preuve = f"fenêtre {run} j (< {seuil})"
+        except (ValueError, TypeError):
+            pass
+    lignes = [f"Article {code} ({(snap or {}).get('libelle') or 'libellé inconnu'}) : "
+              f"{len(ventes)} jour(s) vendu(s)."]
+    if snap is not None:
+        lignes.append(f"Snapshot : stock {snap.get('stock')}, vente {snap.get('px_vente')}, "
+                      f"promo {snap.get('pv_promo')}, couv {snap.get('couv')}.")
+    lignes.append(f"Statut dormant : **{statut}**" + (f" ({preuve})" if preuve else "") + ".")
+    return json.dumps(
+        {"success": True, "rayon": rayon, "code": code, "ventes_par_jour": ventes,
+         "derniers_mouvements": derniers, "snapshot": snap, "statut_dormant": statut,
+         "preuve": preuve, "resume_markdown": "\n".join(lignes)},
+        ensure_ascii=False, indent=2)
