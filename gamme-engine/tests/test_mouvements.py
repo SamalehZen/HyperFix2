@@ -162,3 +162,54 @@ def test_import_reel_13_09(tmp_path, fresh_db):
     assert row is not None
     assert row["quantite"] == 18.0 and row["sens"] == "-"
     assert abs(row["valeur_fichier"] - 19353.29) < 0.01
+
+
+def _gamme_jour(conn, rayon, jour, stocks):
+    from app import db as _db
+
+    iid = _db.create_import(conn, rayon, jour, f"gamme-{jour}.xlsx", f"h{jour}", "ok", nb_articles=len(stocks))
+    for code, stock in stocks.items():
+        conn.execute(
+            "INSERT INTO article_history (import_id, jour, rayon, code, stock) VALUES (?,?,?,?,?)",
+            (iid, jour, rayon, code, stock),
+        )
+    return iid
+
+
+def test_reconciliation_exacte(tmp_path, fresh_db):
+    p = str(tmp_path / "m.xlsx")
+    _write_xlsx(p, [_row(Code="101", **{"Qté UC": "7"})])
+    with db.lock_conn() as conn:
+        _gamme_jour(conn, "frais-surgele", "2026-09-13", {101: 100})
+        _gamme_jour(conn, "frais-surgele", "2026-09-14", {101: 93})
+    res = mouvements.run_mouvement_import(p, rayon="frais-surgele")
+    assert res["ok"]
+    assert res["resume"]["reconciliation"]["statut"] == "reconcilié"
+    with db.lock_conn() as conn:
+        anoms = conn.execute("SELECT * FROM anomalies WHERE type = 'ecart_mouvement'").fetchall()
+    assert len(anoms) == 0
+
+
+def test_reconciliation_ecart_signale(tmp_path, fresh_db):
+    p = str(tmp_path / "m.xlsx")
+    _write_xlsx(p, [_row(Code="101", **{"Qté UC": "7"})])
+    with db.lock_conn() as conn:
+        _gamme_jour(conn, "frais-surgele", "2026-09-13", {101: 100})
+        iid14 = _gamme_jour(conn, "frais-surgele", "2026-09-14", {101: 80})  # 93 attendu
+    res = mouvements.run_mouvement_import(p, rayon="frais-surgele")
+    assert res["ok"]
+    assert res["resume"]["reconciliation"]["nb_ecarts"] == 1
+    with db.lock_conn() as conn:
+        anoms = conn.execute(
+            "SELECT code, description FROM anomalies WHERE type = 'ecart_mouvement' AND import_id = ?",
+            (iid14,)).fetchall()
+    assert len(anoms) == 1 and anoms[0]["code"] == 101
+    assert "-13" in anoms[0]["description"]
+
+
+def test_reconciliation_sans_gamme(tmp_path, fresh_db):
+    p = str(tmp_path / "m.xlsx")
+    _write_xlsx(p, [_row()])
+    res = mouvements.run_mouvement_import(p, rayon="frais-surgele")
+    assert res["ok"]
+    assert res["resume"]["reconciliation"]["statut"] == "mouvements_sans_gamme"

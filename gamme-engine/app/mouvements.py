@@ -9,7 +9,7 @@ import re
 import shutil
 import sqlite3
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from . import config
 from . import db
@@ -290,9 +290,14 @@ def run_mouvement_import(path, rayon=None):
             db.insert_mouvements(conn, import_id, rayon, jour, rows)
     except sqlite3.IntegrityError:
         with db.lock_conn() as conn:
-            db.create_mouvement_import(conn, rayon, jour, os.path.basename(path), h,
-                                       "erreur", message=f"Journée {jour} déjà importée (unicité rayon+jour)")
-        return {"ok": False, "erreur": f"Journée {jour} déjà importée pour ce rayon", "rayon": rayon}
+            exist = conn.execute(
+                "SELECT statut FROM mouvement_imports WHERE rayon = ? AND jour = ?",
+                (rayon, jour),
+            ).fetchone()
+        statut_exist = exist["statut"] if exist else "?"
+        return {"ok": False,
+                "erreur": f"Journée {jour} déjà importée pour ce rayon (statut existant : {statut_exist})",
+                "rayon": rayon}
     except Exception as e:
         if import_id is not None:
             with db.lock_conn() as conn:
@@ -312,4 +317,71 @@ def run_mouvement_import(path, rayon=None):
     }
     with db.lock_conn() as conn:
         db.set_mouvement_import_statut(conn, import_id, "ok", resume["message"], resume=resume)
+    # Phase B — réconciliation. Jamais bloquante : un échec n'invalide pas
+    # l'ingestion (signalé honnêtement dans le résumé).
+    try:
+        with db.lock_conn() as conn:
+            _, couverture = reconcile_jour(conn, rayon, jour)
+        resume["reconciliation"] = couverture
+        with db.lock_conn() as conn:
+            db.set_mouvement_import_statut(conn, import_id, "ok", resume["message"], resume=resume)
+    except Exception as e:
+        resume["reconciliation"] = {"statut": f"non calculée : {e}"}
     return {"ok": True, "resume": resume, "rayon": rayon}
+
+
+def _jour_suivant(jour):
+    y, mo, d = (int(x) for x in jour.split("-"))
+    return (datetime(y, mo, d) + timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def reconcile_jour(conn, rayon, jour):
+    """Phase B — équation stock[J] + Σ(signées[J]) = stock[J+1].
+
+    Retourne (lignes_ecart, couverture). Les écarts sont enregistrés en
+    `anomalies` (type ecart_mouvement) rattachées à l'import gamme J+1 si
+    présent. Ne touche JAMAIS aux tables gamme (lecture seule + anomalies).
+    """
+    imp_j = db.get_gamme_import_for_jour(conn, rayon, jour)
+    jour_suiv = _jour_suivant(jour)
+    imp_j1 = db.get_gamme_import_for_jour(conn, rayon, jour_suiv)
+    couverture = {
+        "jour": jour, "gamme_j": imp_j is not None, "gamme_j1": imp_j1 is not None,
+    }
+    if imp_j is None or imp_j1 is None:
+        couverture["statut"] = "mouvements_sans_gamme" if imp_j is None and imp_j1 is None else (
+            "gamme_j_manquante" if imp_j is None else "gamme_j1_manquante")
+        return [], couverture
+    stock_j = {r["code"]: (r["stock"] or 0) for r in
+               conn.execute("SELECT code, stock FROM article_history WHERE import_id = ?", (imp_j,)).fetchall()}
+    stock_j1 = {r["code"]: (r["stock"] or 0) for r in
+                conn.execute("SELECT code, stock FROM article_history WHERE import_id = ?", (imp_j1,)).fetchall()}
+    net = {}
+    for r in conn.execute(
+            "SELECT code, quantite_signee FROM mouvements WHERE rayon = ? AND jour = ?",
+            (rayon, jour)).fetchall():
+        net[r["code"]] = net.get(r["code"], 0) + (r["quantite_signee"] or 0)
+    ecarts = []
+    for code in set(stock_j) | set(stock_j1) | set(net):
+        attendu = (stock_j.get(code) or 0) + net.get(code, 0)
+        constate = stock_j1.get(code)
+        if constate is None:
+            continue  # article sorti de la gamme : pas un écart mouvements
+        ecart = round((constate or 0) - attendu, 3)
+        if ecart:
+            lib = conn.execute(
+                "SELECT libelle FROM article_history WHERE import_id = ? AND code = ?",
+                (imp_j1, code)).fetchone()
+            ecarts.append({
+                "code": code, "libelle": (lib["libelle"] if lib else None),
+                "stock_j": stock_j.get(code, 0), "net_mouvements": round(net.get(code, 0), 3),
+                "attendu": round(attendu, 3), "constate": constate, "ecart": ecart,
+            })
+    ecarts.sort(key=lambda e: abs(e["ecart"]), reverse=True)
+    for e in ecarts:
+        db.record_anomalie(conn, imp_j1, rayon, jour_suiv, e["code"], "ecart_mouvement",
+                           f"Écart inexpliqué {e['ecart']} ({jour} : {e['stock_j']} + ({e['net_mouvements']}) = {e['attendu']} attendu, {e['constate']} constaté)",
+                           e["attendu"], e["constate"])
+    couverture["statut"] = "reconcilié" if not ecarts else f"{len(ecarts)} écart(s)"
+    couverture["nb_ecarts"] = len(ecarts)
+    return ecarts, couverture
