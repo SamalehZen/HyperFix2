@@ -112,12 +112,21 @@ def validate_mouvements(df):
             "avertissements": [], "compteurs": {},
         }
     df.columns = config.MOUVEMENT_REQUIRED_COLUMNS
+    # 'PRMP' figure 2 fois (positions 7 et 15) : accès scalaire impossible en
+    # doublon — on lève l'ambiguïté en positionnel + contrôle d'écart honnête.
+    cols = list(df.columns)
+    cols[15] = "PRMP_doublon"
+    df.columns = cols
 
     types = load_types()
     nb_vides = 0
     nb_sans_date = 0
     lignes = []
     for _, r in df.iterrows():
+        prmp = db.num(r["PRMP"])
+        prmp2 = db.num(r["PRMP_doublon"])
+        if prmp is not None and prmp2 is not None and round(prmp, 3) != round(prmp2, 3):
+            warnings.append(f"PRMP doublé incohérent (article {str(r['Code']).strip()})")
         code_txt = str(r["Code"]).strip() if r["Code"] is not None and str(r["Code"]).strip().lower() != "nan" else ""
         if not code_txt:
             nb_vides += 1
@@ -327,12 +336,160 @@ def run_mouvement_import(path, rayon=None):
             db.set_mouvement_import_statut(conn, import_id, "ok", resume["message"], resume=resume)
     except Exception as e:
         resume["reconciliation"] = {"statut": f"non calculée : {e}"}
+    # Phase C — indicateurs (même discipline : jamais bloquants).
+    try:
+        with db.lock_conn() as conn:
+            resume["indicateurs"] = indicateurs_jour(conn, rayon, jour)
+        with db.lock_conn() as conn:
+            db.set_mouvement_import_statut(conn, import_id, "ok", resume["message"], resume=resume)
+    except Exception as e:
+        resume["indicateurs"] = {"statut": f"non calculés : {e}"}
     return {"ok": True, "resume": resume, "rayon": rayon}
 
 
 def _jour_suivant(jour):
     y, mo, d = (int(x) for x in jour.split("-"))
     return (datetime(y, mo, d) + timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def _parse_dbt(dbt):
+    if not dbt or str(dbt).strip().lower() in ("", "nan"):
+        return None
+    try:
+        d, mo, y = (int(x) for x in str(dbt).strip().split("/"))
+        return datetime(y, mo, d).date().isoformat()
+    except (ValueError, AttributeError):
+        return None
+
+
+def _prix_applicable(g, jour):
+    """Prix applicable (promo si dates actives, sinon vente). None si inconnu."""
+    pv, pp = g.get("px_vente"), g.get("pv_promo")
+    if (pp or 0) > 0:
+        dbt, dfn = _parse_dbt(g.get("date_dbt")), _parse_dbt(g.get("date_fin"))
+        if dbt and dbt <= jour and (dfn is None or dfn >= jour):
+            return pp, True
+    return (pv if (pv or 0) > 0 else None), False
+
+
+def indicateurs_jour(conn, rayon, jour):
+    """Phase C — CA, marge, rotation, démarque, prix achat, promo, dormants.
+
+    Lecture seule (+ aucun write) : les chiffres sont renvoyés pour le résumé.
+    Hypothèse actée : en période promo, tout part au prix promo."""
+    gamme = db.get_gamme_stock_map(conn, db.get_gamme_import_for_jour(conn, rayon, jour) or -1)
+    rows = conn.execute(
+        "SELECT * FROM mouvements WHERE rayon = ? AND jour = ?", (rayon, jour)).fetchall()
+
+    ca = cout = ca_promo = 0.0
+    top_ventes, sans_prix = [], 0
+    démarque = {}
+    livraisons = {"qte": 0.0, "valeur": 0.0}
+    prix_delta = []
+    for r in rows:
+        r = dict(r)
+        fam = r["type_normalise"]
+        g = gamme.get(r["code"], {})
+        if r["dernier_pr"] and r["prmp"] and round(r["dernier_pr"], 3) != round(r["prmp"], 3):
+            prix_delta.append({"code": r["code"], "libelle": r["libelle"],
+                               "dernier_pr": r["dernier_pr"], "prmp": r["prmp"],
+                               "delta": round(r["dernier_pr"] - r["prmp"], 3)})
+        if fam == "vente":
+            pap, en_promo = _prix_applicable(g, jour)
+            pr = g.get("px_revient") or r["prmp"] or 0
+            if pap is None:
+                sans_prix += 1
+                continue
+            ligne_ca = r["quantite"] * pap
+            ca += ligne_ca
+            cout += r["quantite"] * pr
+            if en_promo:
+                ca_promo += ligne_ca
+            top_ventes.append({"code": r["code"], "libelle": r["libelle"],
+                               "qte": r["quantite"], "ca": round(ligne_ca, 2),
+                               "promo": en_promo})
+        elif fam == "demarque":
+            st = r["sous_type"] or "autre"
+            d = démarque.setdefault(st, {"qte": 0.0, "valeur": 0.0})
+            d["qte"] += r["quantite"]
+            d["valeur"] += round(r["valeur_fichier"] or 0, 2)
+        elif fam == "livraison":
+            livraisons["qte"] += r["quantite"]
+            livraisons["valeur"] += round(r["valeur_fichier"] or 0, 2)
+    top_ventes.sort(key=lambda x: x["qte"], reverse=True)
+    for t in top_ventes:
+        st = (gamme.get(t["code"], {}).get("stock") or 0)
+        t["rotation_jour"] = round(t["qte"] / st, 4) if st > 0 else None
+    prix_delta.sort(key=lambda x: abs(x["delta"]), reverse=True)
+
+    dormants = _dormants(conn, rayon, jour, gamme)
+    return {
+        "ca": round(ca, 2), "cout": round(cout, 2),
+        "marge_encaissee": round(ca - cout, 2),
+        "marge_pct": round(100 * (ca - cout) / ca, 2) if ca else None,
+        "ca_promo": round(ca_promo, 2), "ventes_sans_prix": sans_prix,
+        "top_ventes": top_ventes[:10], "nb_articles_vendus": len(top_ventes),
+        "demarque": démarque, "livraisons": livraisons,
+        "prix_delta": prix_delta[:20], "dormants": dormants,
+    }
+
+
+def _dormants(conn, rayon, jour, gamme):
+    """Dormants prouvés (§6bis) : réveil SM uniquement, stock nul exclu,
+    niveaux estime/partiel/prouve. Jour sans fichier ≠ 0 vente (couverture)."""
+    seuil = config.DORMANT_JOURS
+    j0 = datetime.strptime(jour, "%Y-%m-%d").date()
+    jours_data = [r["jour"] for r in conn.execute(
+        "SELECT DISTINCT jour FROM mouvements WHERE rayon = ? AND jour <= ? ORDER BY jour",
+        (rayon, jour)).fetchall()]
+    nb_jours_data = len(jours_data)
+    dernier_sm = {}
+    for r in conn.execute(
+            "SELECT code, MAX(jour) AS d FROM mouvements "
+            "WHERE rayon = ? AND jour <= ? AND type_normalise = 'vente' GROUP BY code",
+            (rayon, jour)).fetchall():
+        dernier_sm[r["code"]] = r["d"]
+    prouves, partiels, estimes, faux, caches = [], [], [], [], []
+    for code, g in gamme.items():
+        stock = g.get("stock") or 0
+        if stock <= 0:
+            continue
+        d = dernier_sm.get(code)
+        cap = round(stock * (g.get("px_revient") or 0), 2)
+        item = {"code": code, "libelle": g.get("libelle"), "stock": stock,
+                "capital": cap, "dernier_vente": d}
+        if d is None:
+            if (g.get("couv") or 0) == 999:
+                item["niveau"] = "estime"
+                estimes.append(item)
+            else:
+                item["niveau"] = "partiel"
+                item["jours_sans_vente"] = nb_jours_data
+                partiels.append(item)
+            continue
+        gap = (j0 - datetime.strptime(d, "%Y-%m-%d").date()).days
+        item["jours_sans_vente"] = gap
+        if gap >= seuil:
+            item["niveau"] = "prouve"
+            prouves.append(item)
+            if (g.get("couv") or 0) != 999:
+                caches.append(item)
+        elif gap > 0:
+            item["niveau"] = "partiel"
+            partiels.append(item)
+            if (g.get("couv") or 0) == 999:
+                faux.append(item)
+    keycap = lambda x: x["capital"]
+    prouves.sort(key=keycap, reverse=True)
+    return {
+        "seuil_jours": seuil, "jours_donnees": nb_jours_data,
+        "nb_prouves": len(prouves), "nb_partiels": len(partiels),
+        "nb_estimes": len(estimes),
+        "capital_prouve": round(sum(x["capital"] for x in prouves), 2),
+        "top_prouves": prouves[:50],
+        "faux_dormants": sorted(faux, key=keycap, reverse=True)[:50],
+        "dormants_caches": sorted(caches, key=keycap, reverse=True)[:50],
+    }
 
 
 def reconcile_jour(conn, rayon, jour):

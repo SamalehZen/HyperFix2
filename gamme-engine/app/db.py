@@ -391,7 +391,7 @@ def get_gamme_import_for_jour(conn, rayon, jour):
 
 def get_gamme_stock_map(conn, import_id):
     rows = conn.execute(
-        "SELECT code, stock, px_vente, pv_promo, date_dbt, date_fin, px_revient "
+        "SELECT code, libelle, stock, couv, px_vente, pv_promo, date_dbt, date_fin, px_revient "
         "FROM article_history WHERE import_id = ?",
         (import_id,),
     ).fetchall()

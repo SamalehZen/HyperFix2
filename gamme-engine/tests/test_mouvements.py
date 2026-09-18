@@ -213,3 +213,95 @@ def test_reconciliation_sans_gamme(tmp_path, fresh_db):
     res = mouvements.run_mouvement_import(p, rayon="frais-surgele")
     assert res["ok"]
     assert res["resume"]["reconciliation"]["statut"] == "mouvements_sans_gamme"
+
+
+def _gamme_full(conn, rayon, jour, articles):
+    from app import db as _db
+
+    iid = _db.create_import(conn, rayon, jour, f"gamme-{jour}.xlsx", f"h{jour}", "ok",
+                            nb_articles=len(articles))
+    for a in articles:
+        conn.execute(
+            "INSERT INTO article_history (import_id, jour, rayon, code, libelle, stock, couv, "
+            "px_vente, pv_promo, date_dbt, date_fin, px_revient) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (iid, jour, rayon, a["code"], a.get("libelle"), a.get("stock", 0),
+             a.get("couv"), a.get("px_vente"), a.get("pv_promo"), a.get("date_dbt"),
+             a.get("date_fin"), a.get("px_revient")),
+        )
+    return iid
+
+
+def test_ca_promo_exact(tmp_path, fresh_db):
+    p = str(tmp_path / "m.xlsx")
+    _write_xlsx(p, [_row(Code="15218", **{"Qté UC": "18"})])
+    with db.lock_conn() as conn:
+        _gamme_full(conn, "frais-surgele", "2026-09-13", [{
+            "code": 15218, "stock": 3559, "px_vente": 1850, "pv_promo": 1600,
+            "date_dbt": "10/09/2026", "date_fin": "15/09/2026", "px_revient": 1075.183}])
+    res = mouvements.run_mouvement_import(p, rayon="frais-surgele")
+    ind = res["resume"]["indicateurs"]
+    assert ind["ca"] == 28800.0
+    assert abs(ind["marge_encaissee"] - 9446.71) < 0.02
+
+
+def test_ca_hors_promo_prix_vente(tmp_path, fresh_db):
+    p = str(tmp_path / "m.xlsx")
+    _write_xlsx(p, [_row(**{"Qté UC": "2"})])
+    with db.lock_conn() as conn:
+        _gamme_full(conn, "frais-surgele", "2026-09-13", [{
+            "code": 12982, "stock": 100, "px_vente": 200, "pv_promo": 150,
+            "date_dbt": "10/09/2026", "date_fin": "11/09/2026", "px_revient": 100}])
+    res = mouvements.run_mouvement_import(p, rayon="frais-surgele")
+    assert res["resume"]["indicateurs"]["ca"] == 400.0
+
+
+def test_dormants_niveaux(tmp_path, fresh_db):
+    def _imp(jour, rows):
+        q = str(tmp_path / f"m{jour.replace('/', '-')}.xlsx")
+        _write_xlsx(q, rows)
+        r = mouvements.run_mouvement_import(q, rayon="frais-surgele")
+        assert r["ok"], r.get("erreur")
+    _imp("01/06/2026", [
+        _row(Code="11", **{"Date mvt": "01/06/2026"}),   # vendu il y a 104 j
+        _row(Code="12", **{"Date mvt": "01/06/2026"}),
+        _row(Code="16", **{"Date mvt": "01/06/2026"}),
+    ])
+    _imp("03/09/2026", [_row(Code="15", **{"Date mvt": "03/09/2026"})])  # vendu il y a 10 j
+    _imp("13/09/2026", [
+        _row(Code="12", **{"Date mvt": "13/09/2026"}),                       # actif
+        _row(Code="11", **{"Code mvt": "EI", "Date mvt": "13/09/2026"}),     # inventaire ne réveille pas
+        _row(Code="13", **{"Code mvt": "EI", "Date mvt": "13/09/2026"}),     # jamais vendu
+    ])
+    with db.lock_conn() as conn:
+        _gamme_full(conn, "frais-surgele", "2026-09-13", [
+            {"code": 11, "stock": 10, "couv": 30, "px_revient": 100},   # prouvé + caché
+            {"code": 12, "stock": 10, "couv": 30, "px_revient": 100},   # actif
+            {"code": 13, "stock": 5, "couv": 999, "px_revient": 50},    # estimé
+            {"code": 14, "stock": 7, "couv": 30, "px_revient": 50},     # partiel (jamais vendu)
+            {"code": 15, "stock": 9, "couv": 999, "px_revient": 50},    # faux dormant
+            {"code": 16, "stock": 0, "couv": 999, "px_revient": 50},    # exclu (stock nul)
+        ])
+        ind = mouvements.indicateurs_jour(conn, "frais-surgele", "2026-09-13")
+    d = ind["dormants"]
+    assert d["nb_prouves"] == 1 and d["top_prouves"][0]["code"] == 11
+    assert d["nb_estimes"] == 1
+    assert len(d["faux_dormants"]) == 1 and d["faux_dormants"][0]["code"] == 15
+    assert len(d["dormants_caches"]) == 1 and d["dormants_caches"][0]["code"] == 11
+    assert d["capital_prouve"] == 1000.0
+
+
+def test_prix_delta_et_demarque(tmp_path, fresh_db):
+    p = str(tmp_path / "m.xlsx")
+    _write_xlsx(p, [
+        _row(Code="21", **{"Dernier PR": "900", "PRMP": "860"}),
+        _row(Code="22", **{"Code mvt": "10", "Qté UC": "3", "Valeur": "90"}),
+        _row(Code="23", **{"Code mvt": "60", "Qté UC": "2", "Valeur": "40"}),
+    ])
+    with db.lock_conn() as conn:
+        _gamme_full(conn, "frais-surgele", "2026-09-13", [{"code": 21, "stock": 5}])
+    res = mouvements.run_mouvement_import(p, rayon="frais-surgele")
+    ind = res["resume"]["indicateurs"]
+    assert ind["prix_delta"][0]["code"] == 21 and ind["prix_delta"][0]["delta"] == 40.0
+    assert ind["demarque"]["perime"] == {"qte": 3.0, "valeur": 90.0}
+    assert ind["demarque"]["casse_rayon"] == {"qte": 2.0, "valeur": 40.0}
