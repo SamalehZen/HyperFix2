@@ -122,19 +122,44 @@ def validate_file(path):
     missing = [c for c in config.REQUIRED_COLUMNS if c not in df.columns]
     if missing:
         return None, f"Colonnes manquantes : {missing}"
-    df = df[df["Code"].notna()]
+    codes = df["Code"]
+    empty_mask = codes.isna() | (codes.astype(str).str.strip() == "")
+    nb_empty = int(empty_mask.sum())
+    df = df[~empty_mask]
     if df.empty:
-        return None, "Aucun article avec un Code non vide"
+        return None, "Aucun article avec un Code non vide (Codes tous vides)"
+    bad = [str(v) for v in df["Code"] if not _is_int_like(v)]
+    if bad:
+        exemples = ", ".join(bad[:5])
+        return None, f"La colonne Code contient {len(bad)} valeur(s) non entière(s) (ex : {exemples}) — corrigez le fichier"
     try:
-        df["Code"] = df["Code"].astype(float).astype("int64")
+        df["Code"] = df["Code"].apply(lambda v: int(float(str(v).strip())))
     except Exception:
         return None, "La colonne Code contient des valeurs non numériques"
     dups = int(df["Code"].duplicated().sum())
     if dups:
         return None, f"{dups} codes en doublon"
+    # Avertissements qualité (non bloquants) : valeurs illisibles devenant
+    # silencieusement None en base — le modèle doit savoir ce qu'il ne voit pas.
+    warnings = []
+    if nb_empty:
+        warnings.append(f"{nb_empty} ligne(s) sans Code ignorée(s)")
+    for col in _NUMERIC_COLS:
+        if col not in df.columns:
+            continue
+        bad_n = int(sum(1 for v in df[col] if not _is_num_like(v)))
+        if bad_n:
+            warnings.append(f"{bad_n} valeur(s) illisible(s) en '{col}' (ignorées)")
+    for col in _DATE_COLS:
+        if col not in df.columns:
+            continue
+        bad_n = int(sum(1 for v in df[col] if not _date_ok(v)))
+        if bad_n:
+            warnings.append(f"{bad_n} date(s) au format inattendu en '{col}' (attendu JJ/MM/AAAA)")
     for col in df.columns:
         if df[col].dtype == object:
             df[col] = df[col].where(df[col].notna(), None)
+    df.attrs["gamme_warnings"] = warnings
     return df, None
 
 
