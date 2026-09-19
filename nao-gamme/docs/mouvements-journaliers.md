@@ -400,3 +400,9 @@ récemment) et **dormants cachés** (`couv<999` mais 0 vente depuis 3 mois).
   fixes, zéro doublon) ; `reclassify` (mapping évolutif + refresh) ;
   `load_types(refresh=True)` ; `backfill_mouvements.sh` ;
   runbook `docs/exploitation-mouvements.md`. Tests : **86/86**.
+- **Audit A→E — 3 corrections** : (1) redépôt multi-jours renvoyait le résumé
+  d'UN jour (fast-path hash) → **convergence par jour** (agrégat honnête,
+  test dédié) ; code non déployé détecté (grep conteneur) → rebuild +
+  vérifié live ; (2) série CA `null` testée ; (3) props donut nullables
+  (2 erreurs TS rattrapées au build). Leçon : édition identique =
+  corruption (3e cas) → **interdit formel**. Tests : **88/88**.
