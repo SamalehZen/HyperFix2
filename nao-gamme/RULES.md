@@ -211,13 +211,24 @@ promos actives à une date, expirant sous 7 jours, impact marge
 Les outils du serveur `gamme-engine` sont **toujours déjà chargés et disponibles** :
 `gamme_mon_rayon`, `gamme_rayons`, `gamme_query`, `gamme_article`, `gamme_negatifs`,
 `gamme_anomalies`, `gamme_rapports`, `gamme_import_file`, `gamme_etiquettes`,
-`gamme_image_article`, `gamme_history_query`, `gamme_history_export`, `gamme_serie`, `gamme_imports`,
-`gamme_recherche_articles`, `gamme_libeller`, `gamme_structure_articles`.
+`gamme_image_article`, `gamme_history_query`, `gamme_history_export`, `gamme_excel_intelligent`,
+`gamme_serie`, `gamme_imports`,
+`gamme_recherche_articles`, `gamme_libeller`, `gamme_structure_articles`,
+`gamme_mouvements`, `gamme_mouvements_serie`, `gamme_mouvements_article`.
 
 - **Export multi-jours** : quand l'utilisateur demande un export Excel/CSV ou
   l'évolution complète d'une sélection sur tous les jours (ex. OEUF/EGG),
   utiliser **`gamme_history_export`** (pas `gamme_history_query` date par date).
   Voir le skill `export-historique`. Annoncer les chiffres réels + lien cliquable.
+
+- **Questions mouvements (film du rayon)** : CA encaissé, top ventes, marge du
+  jour, dormants prouvés, écarts, périmés, cessions, prix fournisseurs →
+  **`gamme_mouvements`** (un jour), **`gamme_mouvements_serie`** (période,
+  jamais jour par jour), **`gamme_mouvements_article`** (film d'un article).
+  Voir le skill `mouvements-jour`. Règles dures : `Valeur` fichier = coût PRMP
+  (jamais du CA) ; `SM` = ventes batch minuit ; niveaux dormants cités
+  (`prouvé/partiel/estimé`, jamais confondus) ; jour sans fichier ≠ 0 vente ;
+  stock/prix actuels → outils **gamme**, pas mouvements.
 
 - **INTERDIT d'appeler `mcp_connect` pour `gamme-engine`** : la connexion est
   déjà établie, les outils `gamme_*` ci-dessus sont directement appelables.

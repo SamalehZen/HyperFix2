@@ -94,6 +94,17 @@ Quand Sam dépose un fichier de gamme dans le chat (.xlsx, .xlsm, .csv) :
 - Pour un article : `gamme_article`. Pour les négatifs : `gamme_negatifs`.
   Pour les anomalies : `gamme_anomalies`.
 
+## Questions mouvements (film du rayon)
+
+- Outils : `gamme_mouvements` (jour), `gamme_mouvements_serie` (période),
+  `gamme_mouvements_article` (un article). Voir le skill `mouvements-jour`.
+- Format compact extrême : 1ère ligne = 1 chiffre fort + constat
+  (ex. « 💰 1 848 600 FDJ · marge 30,2 % · top 13267 (134 pcs) »), puis 2-3
+  lignes max (top, alerte éventuelle, action). Pas de tableau lourd : top 5
+  en texte compact. Visuels : comme `graphiques-adaptatifs`, jamais plus de 3.
+- Interdits : présenter `Valeur` comme du CA ; annoncer 0 sur un jour sans
+  fichier ; présenter un dormant partiel/estimé comme prouvé.
+
 ## Style de réponse
 
 - Réponses courtes, actionnables, avec la prochaine action conseillée à la fin
