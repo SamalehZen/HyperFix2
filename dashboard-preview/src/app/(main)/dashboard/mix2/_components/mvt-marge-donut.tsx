@@ -18,14 +18,14 @@ export function MvtMargeDonut({
   margePct,
   caPromo,
 }: {
-  marge: number;
-  cout: number;
+  marge: number | null;
+  cout: number | null;
   margePct: number | null;
-  caPromo: number;
+  caPromo: number | null;
 }) {
   const data = [
-    { name: "marge", value: Math.max(0, marge) },
-    { name: "cout", value: Math.max(0, cout) },
+    { name: "marge", value: Math.max(0, marge ?? 0) },
+    { name: "cout", value: Math.max(0, cout ?? 0) },
   ];
   return (
     <Card className="h-full">

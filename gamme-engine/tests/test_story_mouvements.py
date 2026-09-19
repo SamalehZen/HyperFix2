@@ -48,6 +48,21 @@ def test_endpoint_jours_mouvements(fresh_db):
     assert [j["jour"] for j in out["jours"]] == ["2026-09-10", "2026-09-09"]
 
 
+def test_serie_ca_inconnu(fresh_db):
+    # Jour sans gamme : CA null (pas 0), totaux ignorés sans crasher.
+    _rayons()
+    with db.lock_conn() as conn:
+        r = _resume_min()
+        r["indicateurs"]["ca"] = None
+        r["indicateurs"]["marge_encaissee"] = None
+        r["indicateurs"]["ventes_sans_prix"] = 3
+        r["indicateurs"]["prix_manquants"] = True
+        _mouvement_jour(conn, "frais-surgele", "2026-09-10", r)
+    out = _body(story_api.story_mouvements("2026-09-10", "frais-surgele"))
+    assert out["ok"] is True
+    assert out["serie"] == [{"jour": "2026-09-10", "ca": None, "marge": None, "articles": 5}]
+
+
 def test_endpoint_rayon_inconnu(fresh_db):
     _rayons()
     out = _body(story_api.story_mouvements("2026-09-10", "inconnu"))
