@@ -1,0 +1,12 @@
+name: question_mouvements
+prompt: "CA du 10/09 et top 5 ventes : donne 1 graphique bar + 1 tableau avec 1 phrase d'interprétation. Si jour sans mouvements : dire honnêtement 'pas de mouvements', jamais 0."
+sql: |
+  SELECT 'question_mouvements_check' AS check_name
+expect:
+  max_charts: 2
+  chart_types:
+    - "bar"
+  forbidden_chart_types:
+    - "horizontal_bar"
+  requires_table_conditional_formats: true
+  requires_interpretation: true

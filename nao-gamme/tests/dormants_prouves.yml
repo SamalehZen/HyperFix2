@@ -1,0 +1,11 @@
+name: dormants_prouves
+prompt: "Dormants prouvés du rayon : liste avec niveaux prouvé/partiel/estimé. Ne jamais présenter un partiel ou estimé comme prouvé. Citer faux dormants et cachés à part."
+sql: |
+  SELECT 'dormants_prouves_check' AS check_name
+expect:
+  requires_table_conditional_formats: true
+  requires_interpretation: true
+  requires_niveaux: ["prouve", "partiel", "estime"]
+  forbidden_claims:
+    - "partiel présenté comme prouvé"
+    - "estimé présenté comme prouvé"

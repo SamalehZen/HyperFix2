@@ -43,6 +43,22 @@ Exemples :
 
 Texte après chaque graphique : 2-3 phrases (chiffre clé + ce que ça veut dire) par défaut ; version longue (constat + cause possible + action) si nouveau critique, gros capital PRMP, chute forte, marge très négative, anomalie grave. Citer codes + chiffres, noter « J/J-1 : … » quand dispo. Même sur Telegram : les 5 graphiques sont envoyés (tableaux lourds en version compacte top 5, complet dans la Story).
 
+## 3bis. Bloc « film du jour » (mouvements + promos) — après les 5 fixes, jamais avant
+
+Données : outils `gamme_mouvements` (jour), `gamme_mouvements_serie` (44 j) — jamais de recalcul. Si jour sans mouvements : 3 lignes honnêtes (« pas de film ce jour »), jamais inventé.
+
+**Chat (+3 graphiques max, types autorisés uniquement) :**
+- M1. `line`, titre « CA encaissé » : `x_axis_type: date`, `x_axis_key: jour`, série `ca` `#16A34A` label « CA (FDJ) » + 2e série `marge` pointillés, `value_format {d3_format:",.0f", suffix:" FDJ"}`. Interprétation : niveau, record/pic, J/J-1.
+- M2. `bar`, titre « Top ventes du jour (CA) » : `x_axis_type: category`, `x_axis_key: libelle`, série `ca` `#2563EB` label « CA (FDJ) », tri décroissant, top 8, `show_data_labels: true`. Badges promo cités en texte.
+- H1. `bar`, titre « Top promos par perte de marge » : `x_axis_type: category`, `x_axis_key: libelle`, série `perte_marge` `#DC2626`, top 8 (données `gamme_history_query` promos actives).
+- Texte : 3 lignes « 🎬 Film du JJ/MM — CA **X FDJ** (marge Y %), top vente CODE (N pcs). ⚠️ Alerte éventuelle. » + mini-tables (top ventes, écarts, prix Δ — top 5, complet en Story).
+
+**Story (5 onglets intacts, ajouts dedans, 0 nouvel onglet) :**
+- 🎯 Dashboard : kpi_card « CA encaissé » + table top ventes du jour (code, libellé, qté, CA, promo).
+- 💰 Marges & capital : M1 (line CA), M3 `donut` « Marge encaissée vs coût » (1 série + part promo en texte), tables dormants prouvés (code, stock, capital, preuve) et prix Δ, H1 + H2 `bar` « Top fournisseurs par capital bloqué » (données `treemap_fournisseurs`, tri décroissant, rouge).
+- 🚨 Alertes & ruptures : T1 table écarts du jour (code, attendu, constaté, écart, badge chevauchement/nouveauté).
+- Règles : dormants cités avec niveau (`prouvé/partiel/estimé`, jamais confondus) ; `Valeur` fichier = coût, jamais CA ; montants FDJ.
+
 ## 3. Phase B — UNE seule Story à 5 onglets (mise à jour sur place)
 
 **Story unique par rayon : slug fixe SANS date `recap-<rayon>`** (ex. `recap-epicerie-salee`). La date va dans `title` (`Récap Épicerie salée — <jour>`) et dans le contenu, jamais dans le slug. Premier récap : `action:create`. Récaps suivants : si erreur `already exists`, **`action:replace`** avec le contenu complet (jamais `update` par bouts, jamais de nouveau slug, jamais 2 stories pour le même rayon). L'historique des versions côté moteur est normal, mais il n'y a qu'**une Story visible**, toujours complète et fraîche.
