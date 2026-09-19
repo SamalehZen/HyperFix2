@@ -234,6 +234,128 @@ html {
   overscroll-behavior: none;
 }
 
+/* ── wheel (Bencho, MIT — bencho.dev/licence) ───────────────
+   LOCAL TOKEN MAPPING (the only judgement in this block):
+   --ink     → --foreground (this project's ink)
+   --fill-on → --card-foreground (ink on the card the wheel
+                stands on — the wheel always renders in a Card)
+   --font-ui → --font-sans (this project's UI font)
+   Aliased on .hum itself so nothing leaks out as a global.
+   Dark palette: Bencho keys off [data-theme="dark"]; this
+   project keys off .dark — selectors adapted, values kept. */
+
+/* ── humidity ──────────────────────────────────────────── */
+/* ── humidity wheel ─────────────────────────────────────────
+   No pane. The wheel and its pill, stacked, standing directly
+   on whatever the section is made of — the same arrangement
+   the sleep dial uses, and they should read as a pair. */
+/* ── the wheel's four bands ─────────────────────────────────
+   Humidity.tsx names the band and this holds the colour, so
+   the palette can answer the theme — the hexes used to be
+   written in the component and could not.
+
+   The green is the BALANCE CHART'S green, not the site's --ok,
+   and for the reason written up on .bal-plot: --ok is a text
+   green, and a 2px tick is a thin stroke, which always reads
+   darker and duller than a block of the same colour. Two
+   blocks drawing thin lines in green should be drawing the
+   same one.
+
+   Red under 12 and amber from 12 to 25 — the band used to be
+   one amber "Critical", which is the colour of a warning
+   rather than of a problem, and left nothing to say when it
+   got worse. Blue at the top is unchanged: high humidity is
+   not an alarm, it is the other end. */
+.hum {
+  --hum-lit: #12b055;
+  --ink: var(--foreground);
+  --fill-on: var(--card-foreground);
+  --font-ui: var(--font-sans);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  font-family: var(--font-ui);
+  color: var(--fill-on, var(--ink));}
+
+.hum[data-state="crit"] { --hum-lit: #e8443a; }
+
+.hum[data-state="low"] { --hum-lit: #d97706; }
+
+.hum[data-state="high"] { --hum-lit: #2563eb; }
+
+/* the same lift the chart takes on a dark page, and the warm
+   pair with it: a red and an amber picked for white sit heavy
+   on near-black, where the ticks have no mass to carry them */
+.dark .hum { --hum-lit: #3ce085; }
+
+.dark .hum[data-state="crit"] { --hum-lit: #ff6b5e; }
+
+.dark .hum[data-state="low"] { --hum-lit: #f0a02a; }
+
+.dark .hum[data-state="high"] { --hum-lit: #5b9bff; }
+
+.hum-dial { position: relative; width: 250px; height: 250px; }
+
+.hwheel {
+  position: absolute;
+  inset: 0;
+  width: 250px;
+  height: 250px;
+  cursor: grab;
+  touch-action: none;
+  outline: none;}
+
+.hwheel[data-dragging="true"] { cursor: grabbing; }
+
+.hwheel:focus,
+.hwheel:focus-visible {
+  outline: none !important;
+  box-shadow: none;
+  -webkit-tap-highlight-color: transparent;}
+
+.hwheel-readout {
+  position: absolute;
+  left: 0; right: 0;
+  /* centred on the dial rather than measured from the pane's
+     top, which is what 152px was */
+  top: 50%;
+  translate: 0 -50%;
+  display: flex; align-items: baseline; justify-content: center; gap: 2px;
+  pointer-events: none;}
+
+/* Inter, not DM Mono — tabular figures give the stable advance
+   the mono face was there for, and this number counts as you
+   drag. Same swap the sleep dial made. */
+.hum-figure {
+  font-family: var(--font-ui);
+  font-size: 34px;
+  font-weight: 500;
+  /* -0.045, not -0.03. At 34px the figures are large enough to
+     carry tighter tracking than body copy wants, and the unit
+     is set at the same size now — so the pair reads as one
+     word rather than as a number with a symbol after it. The
+     unit takes the same value for exactly that reason. */
+  letter-spacing: -0.045em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;}
+
+/* ── the unit is part of the number ────────────────────────
+   14px at 35% opacity beside a 34px figure was a footnote to
+   it: a caption explaining what the digits meant, in a
+   component where the digits and the ring are the only two
+   things there. At the figure's own size and full ink the two
+   read as ONE reading — "62%" — which is what it is. The
+   margin goes with it; at matching sizes the pair needs no
+   more air than the readout's own 2px gap. */
+.hum-unit {
+  font-family: var(--font-ui);
+  font-size: 34px;
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 1;}
+
 .disable-transitions * {
   transition: none !important;
 }

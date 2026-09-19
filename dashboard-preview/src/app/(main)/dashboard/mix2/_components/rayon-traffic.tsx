@@ -46,7 +46,7 @@ export function RayonTraffic({ seriePrmp }: { seriePrmp: GammeSeriePrmp[] | null
         <CardHeader>
           <CardTitle className="font-normal text-muted-foreground text-sm">Négatifs PRMP — corrigés vs en cours</CardTitle>
         </CardHeader>
-        <CardContent className="flex h-54 items-center justify-center text-sm text-muted-foreground xl:h-64">
+        <CardContent className="flex h-80 items-center justify-center text-sm text-muted-foreground xl:h-96">
           Aucune donnée réelle pour cette période
         </CardContent>
       </Card>
@@ -66,7 +66,7 @@ export function RayonTraffic({ seriePrmp }: { seriePrmp: GammeSeriePrmp[] | null
       </CardHeader>
 
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-54 w-full xl:h-64 2xl:h-72">
+        <ChartContainer config={chartConfig} className="h-80 w-full xl:h-96 2xl:h-96">
           <AreaChart accessibilityLayer data={chartData} margin={{ bottom: 0, left: 0, right: 0, top: 8 }}>
             <defs>
               <linearGradient id="mix2FillNegatifs" x1="0" x2="0" y1="0" y2="1">

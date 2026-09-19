@@ -1,11 +1,10 @@
 "use client";
 
 import { Archive, ArrowUpRight, PackageCheck, PackageX, TrendingDown, TriangleAlert } from "lucide-react";
-import { Label, Pie, PieChart } from "recharts";
 
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { type ChartConfig, ChartContainer } from "@/components/ui/chart";
 import { Separator } from "@/components/ui/separator";
+import Wheel from "@/components/wheel";
 
 const chartData = [{ month: "current", "in-stock": 9208, "low-stock": 155, "out-of-stock": 6 }];
 
@@ -23,31 +22,7 @@ export function InventoryGamme({ stats }: { stats: GammeStats | null }) {
 
   const totalUnits = inStock + lowStock + outOfStock;
   const availablePercent = totalUnits > 0 ? Math.round((inStock / totalUnits) * 100) : 0;
-  const gaugeSegmentCount = 32;
-  const inStockSegments = totalUnits > 0 ? Math.round((inStock / totalUnits) * gaugeSegmentCount) : 0;
-  const lowStockSegments = totalUnits > 0 ? Math.round((lowStock / totalUnits) * gaugeSegmentCount) : 0;
 
-  function getGaugeSegmentStatus(index: number) {
-    if (index < inStockSegments) {
-      return "in-stock";
-    }
-
-    if (index < inStockSegments + lowStockSegments) {
-      return "low-stock";
-    }
-
-    return "out-of-stock";
-  }
-
-  const gaugeSegments = Array.from({ length: gaugeSegmentCount }, (_, index) => {
-    const status = getGaugeSegmentStatus(index);
-    return {
-      fill: `var(--color-${status})`,
-      id: `segment-${index + 1}`,
-      status,
-      value: 1,
-    };
-  });
   const inventorySummary = [
     {
       icon: PackageCheck,
@@ -76,21 +51,6 @@ export function InventoryGamme({ stats }: { stats: GammeStats | null }) {
     },
   ] as const;
 
-const chartConfig = {
-  "in-stock": {
-    label: "En stock",
-    color: "var(--chart-2)",
-  },
-  "low-stock": {
-    label: "Stock bas",
-    color: "var(--chart-1)",
-  },
-  "out-of-stock": {
-    label: "Ruptures",
-    color: "var(--destructive)",
-  },
-} satisfies ChartConfig;
-
   return (
     <Card className="h-full">
       <CardHeader>
@@ -103,45 +63,9 @@ const chartConfig = {
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <ChartContainer config={chartConfig} className="mx-auto h-30 w-full xl:h-40 2xl:h-44">
-          <PieChart>
-            <Pie
-              cx="50%"
-              cy="100%"
-              cornerRadius={6}
-              data={gaugeSegments}
-              dataKey="value"
-              endAngle={0}
-              innerRadius={80}
-              outerRadius={110}
-              paddingAngle={2}
-              startAngle={180}
-              stroke="var(--card)"
-              strokeWidth={1}
-            >
-              <Label
-                content={({ viewBox }) => {
-                  if (viewBox && "cx" in viewBox && "cy" in viewBox) {
-                    return (
-                      <text textAnchor="middle" x={viewBox.cx} y={viewBox.cy}>
-                        <tspan
-                          className="fill-foreground font-medium text-2xl tabular-nums"
-                          x={viewBox.cx}
-                          y={(viewBox.cy || 0) + 36}
-                        >
-                          {availablePercent}%
-                        </tspan>
-                        <tspan className="fill-muted-foreground text-xs" x={viewBox.cx} y={(viewBox.cy || 0) + 52}>
-                          Disponible
-                        </tspan>
-                      </text>
-                    );
-                  }
-                }}
-              />
-            </Pie>
-          </PieChart>
-        </ChartContainer>
+        <div className="mx-auto w-fit">
+          <Wheel value={availablePercent} label="Disponibilité du stock" size={270} />
+        </div>
         <Separator />
 
         <div className="grid grid-cols-5 divide-x">

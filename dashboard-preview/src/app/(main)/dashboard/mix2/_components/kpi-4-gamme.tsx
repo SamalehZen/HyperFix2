@@ -62,14 +62,7 @@ export function Kpi4Gamme({
   const prevOuverts = prevStats?.negatifs ?? null;
 
   return (
-    <section className="space-y-5">
-      <div className="space-y-1">
-        <h2 className="text-3xl tracking-tight">Vue d&apos;ensemble</h2>
-        <p className="text-muted-foreground text-sm">
-          Suivez la valeur stock PRMP, les négatifs ouverts et les anomalies du cycle en cours.
-        </p>
-      </div>
-
+    <section className="space-y-4">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader>
