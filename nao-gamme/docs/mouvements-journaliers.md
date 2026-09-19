@@ -394,3 +394,9 @@ récemment) et **dormants cachés** (`couv<999` mais 0 vente depuis 3 mois).
   résumé 11/09. Leçon déploiement : `up -d` ne recrée pas toujours
   (image runnable orpheline) → toujours `--force-recreate` + vérifier
   l'ID d'image. Tests : **81/81**.
+- **Phase E exécutée (régime continu)** : `couverture()` (gamme×mouvements
+  par jour + trous — vérification manuelle/API, pas d'auto-alerte sans
+  planificateur) ; `recompute_jour` idempotent (seuils modifiés, futurs
+  fixes, zéro doublon) ; `reclassify` (mapping évolutif + refresh) ;
+  `load_types(refresh=True)` ; `backfill_mouvements.sh` ;
+  runbook `docs/exploitation-mouvements.md`. Tests : **86/86**.
