@@ -375,7 +375,13 @@ récemment) et **dormants cachés** (`couv<999` mais 0 vente depuis 3 mois).
   connectNulls, top-produits, donut, barres empilées, table TanStack,
   compteurs, alertes) ; vérifié live (CA 10/09, série 43 j, UI 200).
   Deltas J/J-1 inclus ; seuils alertes : écart 50 pcs/10 000 FDJ,
-  cession 20 000 FDJ, périmé > 0 (modifiables, `story_api.py`).
+  cession 20 000 FDJ, périmé > 0 (modifiables via env, `story_api.py`).
+- **Outil chat exécuté** : 3 outils MCP (`gamme_mouvements`,
+  `gamme_mouvements_serie`, `gamme_mouvements_article`, garde rayon,
+  resume_markdown, 404 honnêtes) + skill `mouvements-jour` + RULES 21 outils
+  + prompts Telegram + récap/Story enrichis (M1/M2/H1 + tables, onglets
+  intacts) + 2 tests yml ; pytest 78+, questionnaire live 10/10 (pièges :
+  12/09 sans fichier, article inconnu).
 - **Refresh post-backfill (13/09)** : résumé recalculé avec le code final
   (fenêtre [13/09], trou 12/09) → dormants 0/460/316 **devenus 0/508/268 +
   48 faux dormants** (articles `couv=999` vendus pendant le backfill —
