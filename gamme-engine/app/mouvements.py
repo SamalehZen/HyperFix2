@@ -272,21 +272,38 @@ def run_mouvement_import(path, rayon=None):
                                            os.path.basename(path), h, "erreur", message=err)
         return {"ok": False, "erreur": err, "rayon": rayon}
 
+    # Convergence par jour (remplace l'ancien fast-path par hash, faux sur
+    # multi-jours : il renvoyait le résumé d'UN jour comme si c'était tout
+    # le fichier). Redépôt exact → tous les jours existent → résumé agrégé.
+    jours = sorted({l["jour"] for l in lignes})
     with db.lock_conn() as conn:
-        info = db.mouvement_import_by_hash(conn, h, rayon)
-        if info is not None:
-            iid, statut, resume_json = info
-            if statut == "erreur":
-                return {"ok": False, "erreur": "Fichier déjà refusé lors d'un passage précédent", "rayon": rayon}
-            if statut == "ok" and resume_json:
-                resume = json.loads(resume_json)
-                resume["deja_importe"] = True
-                return {"ok": True, "resume": resume, "rayon": rayon}
+        existants = {}
+        for j in jours:
+            r = conn.execute(
+                "SELECT statut, resume_json FROM mouvement_imports WHERE rayon = ? AND jour = ?",
+                (rayon, j)).fetchone()
+            if r is not None:
+                existants[j] = (r["statut"], r["resume_json"])
+    if existants and len(existants) == len(jours) and all(s == "ok" for s, _ in existants.values()):
+        details = {}
+        for j, (_, rj) in existants.items():
+            try:
+                details[j] = json.loads(rj) if rj else {}
+            except ValueError:
+                details[j] = {}
+        nb = sum((details[j].get("nb_mouvements", 0) for j in jours))
+        warns = sorted({w for j in jours for w in details[j].get("avertissements", [])})[:20]
+        return {"ok": True, "resume": {
+            "fichier": os.path.basename(path), "rayon": rayon, "jour": jours[-1], "jours": jours,
+            "jours_importes": [], "jours_deja": jours, "jours_erreur": {},
+            "nb_mouvements": nb, "avertissements": warns, "details": details,
+            "deja_importe": True,
+            "message": "Fichier déjà importé (tous les jours).",
+        }, "rayon": rayon}
 
     # M1 — split multi-dates : un fichier = N jours traités en ordre chrono.
     # Chaque jour est atomique (unicité rayon+jour) ; les jours déjà importés
     # sont sautés proprement (chevauchements sans doublons).
-    jours = sorted({l["jour"] for l in lignes})
     label = jours[0] if len(jours) == 1 else f"{jours[0]}_au_{jours[-1]}"
     archive_path, h = archive_mouvement(path, rayon, label)
     basename = os.path.basename(path)

@@ -157,6 +157,24 @@ def test_split_chevauchement_partiel(tmp_path, fresh_db):
     assert res["resume"]["jours_importes"] == ["2026-09-09"]
 
 
+def test_redepot_multi_agrege(tmp_path, fresh_db):
+    # Redépôt exact d'un fichier multi-jours : résumé agrégé, zéro doublon.
+    p = str(tmp_path / "m.xlsx")
+    _write_xlsx(p, [
+        _row(Code="1", **{"Date mvt": "08/09/2026"}),
+        _row(Code="2", **{"Date mvt": "09/09/2026"}),
+    ])
+    r1 = mouvements.run_mouvement_import(p, rayon="frais-surgele")
+    assert r1["ok"] and len(r1["resume"]["jours_importes"]) == 2
+    r2 = mouvements.run_mouvement_import(p, rayon="frais-surgele")
+    assert r2["ok"] and r2["resume"].get("deja_importe") is True
+    assert r2["resume"]["jours_deja"] == ["2026-09-08", "2026-09-09"]
+    assert set(r2["resume"]["details"].keys()) == {"2026-09-08", "2026-09-09"}
+    with db.lock_conn() as conn:
+        n = conn.execute("SELECT COUNT(*) FROM mouvements WHERE rayon = 'frais-surgele'").fetchone()[0]
+    assert n == 2
+
+
 def test_annul_sens_suspect_warning(fresh_db):
     import pandas as pd
 
