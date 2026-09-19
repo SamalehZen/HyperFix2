@@ -387,3 +387,10 @@ récemment) et **dormants cachés** (`couv<999` mais 0 vente depuis 3 mois).
   48 faux dormants** (articles `couv=999` vendus pendant le backfill —
   ex. 18792 vendu le 06/09) ; écart 18702 taggé chevauchement 9h-10h.
   Preuve que le backfill enrichit même les jours déjà importés.
+- **Audit phase D — 4 corrections** : (1) CA **inconnu** (`null` +
+  `prix_manquants`) au lieu de 0 sur jours sans gamme — le 11/09 affichait
+  « CA 0 FDJ / pas de ventes » avec 413 ventes réelles ; (2) deep-link
+  `?tab=mouvements` ; (3) seuils en env (`.env.example`) ; (4) refresh
+  résumé 11/09. Leçon déploiement : `up -d` ne recrée pas toujours
+  (image runnable orpheline) → toujours `--force-recreate` + vérifier
+  l'ID d'image. Tests : **81/81**.
