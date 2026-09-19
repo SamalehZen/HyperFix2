@@ -25,10 +25,10 @@ ANNUL_DE = {
 _DATE_MVT_RE = re.compile(r"^(\d{2})/(\d{2})/(\d{4})$")
 
 
-def load_types():
+def load_types(refresh=False):
     """Mapping code -> {famille, sous_type, note} depuis types_mouvements.json."""
     global _TYPES_CACHE
-    if _TYPES_CACHE is None:
+    if _TYPES_CACHE is None or refresh:
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "types_mouvements.json")
         with open(path, encoding="utf-8") as f:
             _TYPES_CACHE = {k: v for k, v in json.load(f).items() if isinstance(v, dict)}
@@ -400,6 +400,87 @@ def _importe_jour(rayon, jour, lignes, basename, h, archive_path, meta):
 
 
 def _jour_suivant(jour):
+    y, mo, d = (int(x) for x in jour.split("-"))
+    return (datetime(y, mo, d) + timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def couverture(conn, rayon, jours=7):
+    """E1 — régime continu : par jour calendaire (N derniers jusqu'à aujourd'hui),
+    gamme et/ou mouvements présents. Les jours sans fichier sont listés
+    (trous) : sans planificateur, c'est une VÉRIFICATION (manuelle/API),
+    pas une alerte auto."""
+    fin = datetime.now().date()
+    out, trous = [], []
+    for i in range(jours - 1, -1, -1):
+        j = (fin - timedelta(days=i)).isoformat()
+        g = conn.execute(
+            "SELECT 1 FROM imports WHERE rayon = ? AND jour = ? AND statut IN ('ok','baseline')",
+            (rayon, j)).fetchone()
+        m = conn.execute(
+            "SELECT nb_mouvements FROM mouvement_imports WHERE rayon = ? AND jour = ? AND statut = 'ok'",
+            (rayon, j)).fetchone()
+        out.append({"jour": j, "gamme": bool(g), "mouvements": bool(m),
+                    "nb_mouvements": m["nb_mouvements"] if m else 0})
+        if not m:
+            trous.append(j)
+    return {"rayon": rayon, "jours": out, "trous_mouvements": trous}
+
+
+def recompute_jour(conn, rayon, jour):
+    """E2 — recalcule réconciliation+indicateurs d'un jour déjà importé, SANS
+    réimport. Remplace les anomalies du jour (aucun doublon). Sert aux
+    changements de seuils et aux futurs fixes (rend les refresh ad-hoc obsolètes)."""
+    row = conn.execute(
+        "SELECT id, resume_json FROM mouvement_imports WHERE rayon = ? AND jour = ? AND statut = 'ok'",
+        (rayon, jour)).fetchone()
+    if row is None:
+        return {"ok": False, "erreur": f"Pas d'import mouvements ok pour {rayon} le {jour}."}
+    imp_j1 = db.get_gamme_import_for_jour(conn, rayon, _jour_suivant(jour))
+    if imp_j1 is not None:
+        conn.execute(
+            "DELETE FROM anomalies WHERE import_id = ? AND rayon = ? "
+            "AND type IN ('ecart_mouvement', 'nouvel_article') AND jour = ?",
+            (imp_j1, rayon, _jour_suivant(jour)))
+    ecarts, couverture = reconcile_jour(conn, rayon, jour)
+    resume = json.loads(row["resume_json"] or "{}")
+    resume["reconciliation"] = couverture
+    resume["indicateurs"] = indicateurs_jour(conn, rayon, jour)
+    conn.execute("UPDATE mouvement_imports SET resume_json = ? WHERE id = ?",
+                 (json.dumps(resume, ensure_ascii=False), row["id"]))
+    return {"ok": True, "resume": resume, "nb_ecarts": len(ecarts)}
+
+
+def reclassify(conn, rayon, jour_debut=None, jour_fin=None, mapping=None):
+    """E3 — réapplique le mapping (types_mouvements.json, rechargé) aux lignes
+    existantes, puis refresh les résumés via recompute. Couvre codes nouveaux
+    et changements (ex. OJ qui s'activerait)."""
+    types = mapping if mapping is not None else load_types(refresh=True)
+    q = "SELECT id, code_mvt FROM mouvements WHERE rayon = ?"
+    args = [rayon]
+    if jour_debut:
+        q += " AND jour >= ?"
+        args.append(jour_debut)
+    if jour_fin:
+        q += " AND jour <= ?"
+        args.append(jour_fin)
+    maj, jours = 0, set()
+    for r in conn.execute(q, args).fetchall():
+        t = types.get(r["code_mvt"])
+        fam = t["famille"] if t else "type_inconnu"
+        st = t.get("sous_type") if t else None
+        cur = conn.execute("SELECT type_normalise, sous_type FROM mouvements WHERE id = ?",
+                           (r["id"],)).fetchone()
+        if cur["type_normalise"] != fam or cur["sous_type"] != st:
+            conn.execute("UPDATE mouvements SET type_normalise = ?, sous_type = ? WHERE id = ?",
+                         (fam, st, r["id"]))
+            maj += 1
+            j = conn.execute("SELECT jour FROM mouvements WHERE id = ?", (r["id"],)).fetchone()["jour"]
+            jours.add(j)
+    resumes = {}
+    for j in sorted(jours):
+        out = recompute_jour(conn, rayon, j)
+        resumes[j] = out.get("resume", {"erreur": out.get("erreur")})
+    return {"ok": True, "lignes_maj": maj, "jours": sorted(jours), "resumes": resumes}
     y, mo, d = (int(x) for x in jour.split("-"))
     return (datetime(y, mo, d) + timedelta(days=1)).strftime("%Y-%m-%d")
 

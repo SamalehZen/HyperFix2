@@ -456,3 +456,66 @@ def test_chaine_apres_incoherente_warning(fresh_db):
     lignes, meta = mouvements.validate_mouvements(df)
     assert lignes is not None
     assert any("Chaîne Qte.après incohérente" in w for w in meta["avertissements"])
+
+
+def test_couverture_trous(fresh_db):
+    from datetime import date, timedelta
+
+    with db.lock_conn() as conn:
+        j1 = (date.today() - timedelta(days=2)).isoformat()
+        db.create_mouvement_import(conn, "frais-surgele", j1, "f.xlsx", "h1", "ok", nb_mouvements=1)
+        db.create_import(conn, "frais-surgele", j1, "g.xlsx", "hg", "ok", nb_articles=1)
+        couv = mouvements.couverture(conn, "frais-surgele", jours=3)
+    assert [j["jour"] for j in couv["jours"]][0] <= j1 <= [j["jour"] for j in couv["jours"]][-1]
+    par_jour = {j["jour"]: j for j in couv["jours"]}
+    assert par_jour[j1]["gamme"] is True and par_jour[j1]["mouvements"] is True
+    assert date.today().isoformat() in couv["trous_mouvements"]
+
+
+def test_recompute_sans_doublon(fresh_db):
+    with db.lock_conn() as conn:
+        _gamme_jour(conn, "frais-surgele", "2026-09-13", {101: 100})
+        _gamme_jour(conn, "frais-surgele", "2026-09-14", {101: 80})
+        iid = db.create_mouvement_import(conn, "frais-surgele", "2026-09-13", "f.xlsx",
+                                         "h", "ok", nb_mouvements=1,
+                                         resume={"reconciliation": {}, "indicateurs": {}})
+        db.insert_mouvements(conn, iid, "frais-surgele", "2026-09-13",
+                             [_mvt_row(iid, "2026-09-13", "frais-surgele", 101,
+                                       "SM", "-", 7.0, "12:00:00")])
+        out1 = mouvements.recompute_jour(conn, "frais-surgele", "2026-09-13")
+        n1 = conn.execute("SELECT COUNT(*) FROM anomalies WHERE type = 'ecart_mouvement'").fetchone()[0]
+        out2 = mouvements.recompute_jour(conn, "frais-surgele", "2026-09-13")
+        n2 = conn.execute("SELECT COUNT(*) FROM anomalies WHERE type = 'ecart_mouvement'").fetchone()[0]
+    assert out1["ok"] and out2["ok"] and n1 == 1 and n2 == 1
+    assert out2["resume"]["reconciliation"]["nb_ecarts"] == 1
+
+
+def test_recompute_jour_absent(fresh_db):
+    with db.lock_conn() as conn:
+        out = mouvements.recompute_jour(conn, "frais-surgele", "2026-01-01")
+    assert out["ok"] is False
+
+
+def test_reclassify_mapping(fresh_db):
+    with db.lock_conn() as conn:
+        iid = db.create_mouvement_import(conn, "frais-surgele", "2026-09-13", "f.xlsx",
+                                         "h", "ok", nb_mouvements=1,
+                                         resume={"reconciliation": {}, "indicateurs": {}})
+        db.insert_mouvements(conn, iid, "frais-surgele", "2026-09-13",
+                             [_mvt_row(iid, "2026-09-13", "frais-surgele", 501,
+                                       "ZZ", "-", 1.0, "12:00:00")])
+        conn.execute("UPDATE mouvements SET type_normalise = 'type_inconnu' WHERE import_id = ?", (iid,))
+        out = mouvements.reclassify(
+            conn, "frais-surgele",
+            mapping={"ZZ": {"famille": "cession", "sous_type": "test", "note": ""}})
+    assert out["ok"] is True and out["lignes_maj"] == 1
+    assert out["jours"] == ["2026-09-13"]
+    with db.lock_conn() as conn:
+        r = conn.execute("SELECT type_normalise, sous_type FROM mouvements WHERE code = 501").fetchone()
+    assert (r["type_normalise"], r["sous_type"]) == ("cession", "test")
+
+
+def test_load_types_refresh():
+    m1 = mouvements.load_types()
+    m2 = mouvements.load_types(refresh=True)
+    assert m1 is not m2 and len(m2) == 58
