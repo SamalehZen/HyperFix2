@@ -78,6 +78,21 @@ def test_outil_serie_trous(authed, fresh_db):
     assert "Trous" in out["resume_markdown"]
 
 
+def test_outil_jour_prix_manquants(authed, fresh_db):
+    with db.lock_conn() as conn:
+        r = _resume_min()
+        r["indicateurs"]["ca"] = None
+        r["indicateurs"]["marge_encaissee"] = None
+        r["indicateurs"]["ventes_sans_prix"] = 5
+        r["indicateurs"]["prix_manquants"] = True
+        _mouvement_jour(conn, "frais-surgele", "2026-09-10", r)
+    out = _out(mcp_server.gamme_mouvements("frais-surgele", "2026-09-10"))
+    assert out["success"] is True
+    assert "non chiffrables" in out["resume_markdown"]
+    out2 = _out(mcp_server.gamme_mouvements_serie("frais-surgele"))
+    assert out2["success"] is True and out2["serie"][0]["ca"] is None
+
+
 def test_outil_article(authed, fresh_db):
     with db.lock_conn() as conn:
         iid = db.create_mouvement_import(conn, "frais-surgele", "2026-09-10", "f.xlsx",

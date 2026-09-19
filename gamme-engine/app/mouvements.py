@@ -475,11 +475,18 @@ def indicateurs_jour(conn, rayon, jour):
     prix_delta.sort(key=lambda x: abs(x["delta"]), reverse=True)
 
     dormants = _dormants(conn, rayon, jour, gamme)
+    # Jour sans gamme : les ventes existent mais aucun prix applicable —
+    # le CA est INCONNU (pas 0). Signalé explicitement, jamais 0 affiché.
+    prix_manquants = (ca == 0 and sans_prix > 0)
+    if prix_manquants:
+        ca = cout = None
     return {
-        "ca": round(ca, 2), "cout": round(cout, 2),
-        "marge_encaissee": round(ca - cout, 2),
+        "ca": round(ca, 2) if ca is not None else None,
+        "cout": round(cout, 2) if cout is not None else None,
+        "marge_encaissee": round(ca - cout, 2) if ca is not None else None,
         "marge_pct": round(100 * (ca - cout) / ca, 2) if ca else None,
-        "ca_promo": round(ca_promo, 2), "ventes_sans_prix": sans_prix,
+        "ca_promo": round(ca_promo, 2) if ca is not None else None,
+        "ventes_sans_prix": sans_prix, "prix_manquants": prix_manquants,
         "top_ventes": top_ventes[:10], "nb_articles_vendus": len(top_ventes),
         "demarque": démarque, "livraisons": livraisons,
         "prix_delta": prix_delta[:20], "dormants": dormants,

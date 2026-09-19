@@ -1269,6 +1269,10 @@ def _mouvement_resume_markdown(jour, rayon, resume) -> str:
     ind = (resume or {}).get("indicateurs") or {}
     if not isinstance(ind, dict) or "ca" not in ind:
         return f"Pas d'indicateurs pour {rayon} le {jour}."
+    if ind.get("prix_manquants"):
+        return (f"Film du {jour} ({rayon}) : ventes non chiffrables "
+                f"(pas de gamme ce jour — {ind.get('ventes_sans_prix', 0)} ventes sans prix). "
+                f"Ce n'est PAS 0 FDJ de CA.")
     lignes = [
         f"Film du {jour} ({rayon}) : CA encaissé **{ind.get('ca', 0):,.0f} FDJ**, "
         f"marge **{ind.get('marge_encaissee', 0):,.0f} FDJ** ({ind.get('marge_pct')} %), "
@@ -1392,8 +1396,13 @@ def gamme_mouvements_serie(rayon: str, date_debut: str = "", date_fin: str = "")
     if trous:
         lignes.append(f"Trous sans fichier ({len(trous)}) : {', '.join(trous[:10])}"
                       + ("…" if len(trous) > 10 else "") + " — continuité non garantie.")
-    best = max(serie, key=lambda p: p["ca"])
-    lignes.append(f"Meilleur jour : {best['jour']} ({best['ca']:,.0f} FDJ).".replace(",", " "))
+    chiffres = [p for p in serie if p["ca"] is not None]
+    if chiffres:
+        best = max(chiffres, key=lambda p: p["ca"])
+        lignes.append(f"Meilleur jour : {best['jour']} ({best['ca']:,.0f} FDJ).".replace(",", " "))
+    non_chiffres = [p["jour"] for p in serie if p["ca"] is None]
+    if non_chiffres:
+        lignes.append(f"Jours non chiffrables (pas de gamme, CA inconnu — pas 0) : {', '.join(non_chiffres)}.")
     return json.dumps(
         {"success": True, "rayon": rayon, "nb_jours": len(serie), "serie": serie,
          "jours_disponibles": jours, "trous": trous,

@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 import { fmtFdj, type MvtVente } from "../_lib/mouvements";
 
-export function MvtTopVentes({ ventes }: { ventes: MvtVente[] }) {
+export function MvtTopVentes({ ventes, prixManquants }: { ventes: MvtVente[]; prixManquants?: boolean }) {
   const total = ventes.reduce((s, v) => s + (v.ca || 0), 0);
   const top = ventes.slice(0, 10);
   const maxQte = Math.max(1, ...top.map((v) => v.qte || 0));
@@ -61,7 +61,9 @@ export function MvtTopVentes({ ventes }: { ventes: MvtVente[] }) {
             {!top.length && (
               <TableRow>
                 <TableCell colSpan={4} className="text-muted-foreground">
-                  Aucune vente enregistrée.
+                  {prixManquants
+                    ? "Ventes non chiffrables (pas de gamme ce jour) — il y a bien eu des ventes."
+                    : "Aucune vente enregistrée."}
                 </TableCell>
               </TableRow>
             )}

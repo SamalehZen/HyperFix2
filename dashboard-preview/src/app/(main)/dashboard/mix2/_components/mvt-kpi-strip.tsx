@@ -22,12 +22,15 @@ function Delta({ delta }: { delta: number | null }) {
 export function MvtKpiStrip({ resume, prev }: { resume: MvtResume | null; prev: MvtResume | null }) {
   const ind = resume?.indicateurs;
   const pind = prev?.indicateurs;
+  const noPrice = ind?.prix_manquants === true;
+  const delta = (cur?: number | null, prv?: number | null) =>
+    cur != null && prv != null ? pctDelta(cur, prv) : null;
   const cards = [
-    { titre: "CA encaissé", valeur: fmtFdj(ind?.ca), delta: pctDelta(ind?.ca ?? 0, pind?.ca) },
+    { titre: "CA encaissé", valeur: fmtFdj(ind?.ca), delta: delta(ind?.ca, pind?.ca) },
     {
       titre: "Marge encaissée",
       valeur: `${fmtFdj(ind?.marge_encaissee)}${ind?.marge_pct != null ? ` (${ind.marge_pct}%)` : ""}`,
-      delta: pctDelta(ind?.marge_encaissee ?? 0, pind?.marge_encaissee),
+      delta: delta(ind?.marge_encaissee, pind?.marge_encaissee),
     },
     {
       titre: "Articles vendus",
@@ -53,7 +56,11 @@ export function MvtKpiStrip({ resume, prev }: { resume: MvtResume | null; prev: 
               <Delta delta={c.delta} />
             </div>
             <div className="text-muted-foreground text-xs">
-              {prev ? `vs ${prev.jour}` : "sans jour précédent"}
+              {noPrice
+                ? "Prix indisponibles (pas de gamme ce jour) — ce n'est pas 0 FDJ"
+                : prev
+                  ? `vs ${prev.jour}`
+                  : "sans jour précédent"}
             </div>
           </CardContent>
         </Card>

@@ -10,6 +10,7 @@ import { MouvementsDashboard } from "./_components/mouvements-dashboard";
 export default function Page() {
   const [rayon, setRayon] = React.useState("frais-surgele");
   const [jour, setJour] = React.useState<string | null>(null);
+  const [tab, setTab] = React.useState("pilotage");
 
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -17,10 +18,12 @@ export default function Page() {
     if (r) setRayon(r);
     const j = params.get("jour");
     if (j) setJour(j);
+    const t = params.get("tab");
+    if (t === "mouvements" || t === "pilotage") setTab(t);
   }, []);
 
   return (
-    <Tabs defaultValue="pilotage" className="flex flex-col gap-4">
+    <Tabs value={tab} onValueChange={setTab} className="flex flex-col gap-4">
       <TabsList className="w-fit">
         <TabsTrigger value="pilotage">Pilotage</TabsTrigger>
         <TabsTrigger value="mouvements">Mouvements</TabsTrigger>

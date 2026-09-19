@@ -9,8 +9,8 @@ export interface MvtVente {
 
 export interface MvtSerieJour {
   jour: string;
-  ca: number;
-  marge: number;
+  ca: number | null;
+  marge: number | null;
   articles: number;
 }
 
@@ -38,12 +38,13 @@ export interface MvtDormants {
 }
 
 export interface MvtIndicateurs {
-  ca: number;
-  cout: number;
-  marge_encaissee: number;
+  ca: number | null;
+  cout: number | null;
+  marge_encaissee: number | null;
   marge_pct: number | null;
-  ca_promo: number;
+  ca_promo: number | null;
   ventes_sans_prix: number;
+  prix_manquants?: boolean;
   top_ventes: MvtVente[];
   nb_articles_vendus: number;
   demarque: Record<string, { qte: number; valeur: number }>;

@@ -339,6 +339,18 @@ def test_prix_delta_et_demarque(tmp_path, fresh_db):
     assert ind["demarque"]["casse_rayon"] == {"qte": 2.0, "valeur": 40.0}
 
 
+def test_indicateurs_sans_gamme_prix_manquants(tmp_path, fresh_db):
+    # Jour sans gamme : ventes existantes mais CA INCONNU (pas 0).
+    p = str(tmp_path / "m.xlsx")
+    _write_xlsx(p, [_row(**{"Qté UC": "5"})])
+    res = mouvements.run_mouvement_import(p, rayon="frais-surgele")
+    assert res["ok"]
+    ind = res["resume"]["details"]["2026-09-13"]["indicateurs"]
+    assert ind["prix_manquants"] is True
+    assert ind["ca"] is None and ind["marge_encaissee"] is None
+    assert ind["ventes_sans_prix"] == 1
+
+
 def _mvt_row(iid, jour, rayon, code, code_mvt="SM", sens="-", qte=1.0, heure="12:00:00"):
     return (iid, jour, rayon, code, f"ART {code}", "02-001", code_mvt, "lib",
             {"SM": "vente"}.get(code_mvt, "inventaire"), None, "0",

@@ -129,7 +129,7 @@ export function MouvementsDashboard({ rayon: rayonInit, jour: jourInit }: { rayo
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
             <div className="xl:col-span-8">
-              <MvtTopVentes ventes={ind.top_ventes} />
+              <MvtTopVentes ventes={ind.top_ventes} prixManquants={ind.prix_manquants} />
             </div>
             <div className="xl:col-span-4">
               <MvtMargeDonut
