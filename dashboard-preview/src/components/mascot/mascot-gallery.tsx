@@ -1,8 +1,8 @@
 /**
  * Galerie de sélection des mascottes : vignettes FIGÉES (aucune boucle rAF),
  * survol = clin d'œil (une seule instance animée à la fois), clic = choix.
- * Bouton "séquence" : rejoue la même chorégraphie sur toute l'équipe d'un
- * coup (le "clone" — gratuit car `sample(t)` est pur, aucune synchro).
+ * Bouton "reel" : joue les 14 animations sur toute l'équipe d'un coup
+ * (le "clone" — gratuit car `sample(t)` est pur, aucune synchro).
  * Intégrée au popover Settings (`layout-controls.tsx`).
  */
 
@@ -17,30 +17,20 @@ import type { Mascotte } from "@/lib/preferences/mascotte";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
 import { MascotAvatar } from "@/components/mascot/mascot-avatar";
+import { REEL_14 } from "@/components/mascot/mascot-cycles";
 import type { MascotState } from "@/components/mascot/mascot-engine";
 import { MASCOTS } from "@/components/mascot/mascot-skins";
-
-const DEMO_SEQUENCE: MascotState[] = ["thinking", "notify", "idle"];
-const DEMO_STEP_MS = 1500;
 
 export function MascotGallery() {
   const mascotte = usePreferencesStore((s) => s.values.mascotte);
   const setPreference = usePreferencesStore((s) => s.setPreference);
   const [survolee, setSurvolee] = React.useState<string | null>(null);
-  const [demoStep, setDemoStep] = React.useState<number | null>(null);
+  const [reel, setReel] = React.useState<number | null>(null);
   const [reducedMotion] = React.useState(
     () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
 
-  const jouerSequence = () => {
-    if (demoStep !== null || reducedMotion) return;
-    setDemoStep(0);
-    DEMO_SEQUENCE.forEach((_, i) => {
-      window.setTimeout(() => setDemoStep(i + 1 >= DEMO_SEQUENCE.length ? null : i + 1), DEMO_STEP_MS * (i + 1));
-    });
-  };
-
-  const demoState: MascotState | null = demoStep !== null ? (DEMO_SEQUENCE[demoStep] ?? null) : null;
+  const enReel = reel !== null && !reducedMotion;
 
   return (
     <div className="space-y-1.5">
@@ -48,8 +38,8 @@ export function MascotGallery() {
         {MASCOTS.map((m) => {
           const active = mascotte === m.id;
           const hover = survolee === m.id;
-          const animee = demoState !== null || (hover && !active && !reducedMotion);
-          const etat: MascotState = demoState ?? (hover && !active ? "wink" : "idle");
+          const animee = enReel || (hover && !active && !reducedMotion);
+          const etat: MascotState = hover && !active && !enReel ? "wink" : "idle";
           return (
             <button
               key={m.id}
@@ -70,7 +60,19 @@ export function MascotGallery() {
               )}
             >
               {animee ? (
-                <MascotAvatar mascotId={m.id} state={etat} size={40} label={m.label} />
+                enReel ? (
+                  <MascotAvatar
+                    mascotId={m.id}
+                    sequence={REEL_14}
+                    playing
+                    playKey={reel}
+                    onSequenceEnd={() => setReel(null)}
+                    size={40}
+                    label={m.label}
+                  />
+                ) : (
+                  <MascotAvatar mascotId={m.id} state={etat} size={40} label={m.label} />
+                )
               ) : (
                 <MascotAvatar mascotId={m.id} state="idle" size={40} frozen label={m.label} />
               )}
@@ -84,11 +86,11 @@ export function MascotGallery() {
         size="sm"
         variant="outline"
         className="w-full text-xs"
-        onClick={jouerSequence}
-        disabled={demoStep !== null || reducedMotion}
+        onClick={() => setReel((r) => (r === null ? 0 : r + 1))}
+        disabled={enReel || reducedMotion}
       >
         <Play />
-        {demoStep !== null ? "Séquence en cours…" : "Jouer la séquence sur l'équipe"}
+        {enReel ? "Reel en cours…" : "Jouer les 14 animations sur l'équipe"}
       </Button>
     </div>
   );
