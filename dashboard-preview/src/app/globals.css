@@ -6,6 +6,8 @@
 @import "../styles/presets/brutalist.css";
 @import "../styles/presets/soft-pop.css";
 @import "../styles/presets/tangerine.css";
+@import "../styles/presets/twitter.css";
+@import "../styles/presets/supabase.css";
 
 @custom-variant dark (&:is(.dark *));
 

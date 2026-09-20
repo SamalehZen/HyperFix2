@@ -43,6 +43,22 @@ export const THEME_PRESET_OPTIONS = [
       dark: "oklch(0.64 0.17 36.44)",
     },
   },
+  {
+    label: "Twitter",
+    value: "twitter",
+    primary: {
+      light: "oklch(0.6723 0.1606 244.9955)",
+      dark: "oklch(0.6692 0.1607 245.011)",
+    },
+  },
+  {
+    label: "Supabase",
+    value: "supabase",
+    primary: {
+      light: "oklch(0.8348 0.1302 160.908)",
+      dark: "oklch(0.4365 0.1044 156.7556)",
+    },
+  },
 ] as const;
 
 export const THEME_PRESET_VALUES = THEME_PRESET_OPTIONS.map((p) => p.value);
