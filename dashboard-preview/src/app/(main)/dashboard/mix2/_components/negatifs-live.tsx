@@ -79,7 +79,7 @@ export function NegatifsLive({ story, jour, loading }: { story: GammeStory | nul
                   <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} interval={0} />
                   <YAxis hide domain={[0, (dataMax: number) => Math.max(4, dataMax + 5)]} />
                   <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-                  <Bar dataKey="count" fill="var(--destructive)" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="count" fill="var(--primary)" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ChartContainer>
             ) : (

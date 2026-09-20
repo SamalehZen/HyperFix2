@@ -55,7 +55,7 @@ const revenueOverviewData = getRollingRevenueBuckets().flatMap(({ month, values 
 const revenueOverviewConfig = {
   revenue: {
     label: "Valeur",
-    color: "var(--foreground)",
+    color: "var(--primary)",
   },
   profit: {
     label: "Marge",

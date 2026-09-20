@@ -70,7 +70,7 @@ function dailyData(serie: GammeSerieJour[]): { date: string; negatifs: number }[
 const pipelineChartConfig = {
   negatifs: {
     label: "Négatifs détectés",
-    color: "var(--chart-2)",
+    color: "var(--primary)",
   },
 } satisfies ChartConfig;
 
