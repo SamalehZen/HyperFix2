@@ -273,7 +273,6 @@ export function toArticleDetail(n: GammeNegatif): DashboardArticleDetail {
 export interface SourcesSegment {
   label: string;
   value: number;
-  opacity: string;
 }
 
 export function computeSources(story: GammeStory): SourcesSegment[] {
@@ -285,8 +284,8 @@ export function computeSources(story: GammeStory): SourcesSegment[] {
     .filter((n) => n.priorite !== "critique" && n.priorite !== "important")
     .reduce((s, n) => s + valueOf(n), 0);
   return [
-    { label: "Négatifs critiques", value: critiques, opacity: "" },
-    { label: "Négatifs importants", value: importants, opacity: "/75" },
-    { label: "Autres négatifs", value: autres, opacity: "/50" },
+    { label: "Négatifs critiques", value: critiques },
+    { label: "Négatifs importants", value: importants },
+    { label: "Autres négatifs", value: autres },
   ];
 }
