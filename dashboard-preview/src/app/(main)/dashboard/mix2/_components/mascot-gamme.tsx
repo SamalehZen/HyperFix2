@@ -48,7 +48,7 @@ export function MascotGamme({ state = "idle", rayon = "frais-surgele" }: { state
 
   if (id === "none" || !MASCOTS.some((m) => m.id === id)) {
     return (
-      <div className="grid size-12 shrink-0 place-items-center rounded-full bg-primary text-xl font-semibold text-primary-foreground">
+      <div className="grid size-20 shrink-0 place-items-center rounded-full bg-primary text-3xl font-semibold text-primary-foreground">
         S
       </div>
     );
@@ -62,7 +62,7 @@ export function MascotGamme({ state = "idle", rayon = "frais-surgele" }: { state
       title={enReel ? "Animation en cours…" : "Rejouer les 14 animations"}
       aria-label={enReel ? "Animation en cours" : "Rejouer les 14 animations"}
       onClick={() => setReel((r) => (r === null ? 0 : r + 1))}
-      className="grid size-12 shrink-0 cursor-pointer place-items-center rounded-full bg-primary/10"
+      className="grid size-20 shrink-0 cursor-pointer place-items-center rounded-full bg-primary/10"
     >
       {enReel ? (
         <MascotAvatar
@@ -71,11 +71,11 @@ export function MascotGamme({ state = "idle", rayon = "frais-surgele" }: { state
           playing
           playKey={reel}
           onSequenceEnd={() => setReel(null)}
-          size={44}
+          size={72}
           interactive
         />
       ) : (
-        <MascotAvatar mascotId={id} state={state} size={44} interactive playKey={id} />
+        <MascotAvatar mascotId={id} state={state} size={72} interactive playKey={id} />
       )}
     </button>
   );
