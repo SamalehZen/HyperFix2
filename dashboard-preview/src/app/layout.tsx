@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
-  const { theme_mode, theme_preset, content_layout, navbar_style, sidebar_variant, sidebar_collapsible, font } =
+  const { theme_mode, theme_preset, content_layout, navbar_style, sidebar_variant, sidebar_collapsible, font, mascotte } =
     PREFERENCE_DEFAULTS;
   return (
     <html
@@ -31,6 +31,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       data-sidebar-variant={sidebar_variant}
       data-sidebar-collapsible={sidebar_collapsible}
       data-font={font}
+      data-mascotte={mascotte}
       suppressHydrationWarning
     >
       <head>

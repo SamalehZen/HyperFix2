@@ -19,6 +19,7 @@ import {
   SIDEBAR_COLLAPSIBLE_VALUES,
   SIDEBAR_VARIANT_VALUES,
 } from "./layout";
+import { MASCOTTE_VALUES } from "./mascotte";
 import { THEME_MODE_VALUES, THEME_PRESET_VALUES } from "./theme";
 
 export type PreferencePersistence = "none" | "client-cookie" | "server-cookie" | "localStorage";
@@ -100,6 +101,13 @@ export const PREFERENCE_REGISTRY = {
     defaultValue: "icon",
     persistence: "client-cookie",
     attribute: "data-sidebar-collapsible",
+  }),
+
+  mascotte: definePreference({
+    values: MASCOTTE_VALUES,
+    defaultValue: "blob",
+    persistence: "client-cookie",
+    attribute: "data-mascotte",
   }),
 } as const;
 

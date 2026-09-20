@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { type FontKey, fontOptions } from "@/lib/fonts/registry";
 import type { ContentLayout, NavbarStyle, SidebarCollapsible, SidebarVariant } from "@/lib/preferences/layout";
+import { MASCOTTE_OPTIONS, type Mascotte } from "@/lib/preferences/mascotte";
 import { THEME_PRESET_OPTIONS, type ThemeMode, type ThemePreset } from "@/lib/preferences/theme";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
@@ -31,6 +32,7 @@ export function LayoutControls() {
     sidebar_variant: variant,
     sidebar_collapsible: collapsible,
     font,
+    mascotte,
   } = values;
 
   const onThemePresetChange = (preset: ThemePreset) => {
@@ -65,6 +67,11 @@ export function LayoutControls() {
   const onFontChange = (value: FontKey | "") => {
     if (!value) return;
     setPreference("font", value);
+  };
+
+  const onMascotteChange = (value: Mascotte | "") => {
+    if (!value) return;
+    setPreference("mascotte", value);
   };
 
   return (
@@ -116,6 +123,24 @@ export function LayoutControls() {
                     {fontOptions.map((font) => (
                       <SelectItem key={font.key} className="text-xs" value={font.key}>
                         {font.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="font-medium text-xs">Mascotte</Label>
+              <Select value={mascotte} onValueChange={onMascotteChange}>
+                <SelectTrigger size="sm" className="w-full text-xs">
+                  <SelectValue placeholder="Mascotte" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {MASCOTTE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} className="text-xs" value={option.value}>
+                        {option.label}
                       </SelectItem>
                     ))}
                   </SelectGroup>

@@ -36,6 +36,7 @@ import {
   toDashboardRows,
 } from "../_lib/gamme";
 import { CitationGamme } from "./citation-gamme";
+import { MascotGamme } from "./mascot-gamme";
 import { Historique12Mois } from "./historique-12mois";
 import { InventoryGamme } from "./inventory-gamme";
 import { Kpi4Gamme } from "./kpi-4-gamme";
@@ -138,9 +139,7 @@ export function GammeDashboard() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-4">
-          <div className="grid size-12 shrink-0 place-items-center rounded-full bg-primary text-xl font-semibold text-primary-foreground">
-            S
-          </div>
+          <MascotGamme />
           <div className="flex flex-col gap-1">
             <h1 className="text-3xl leading-none tracking-tight">Bonjour Samaleh 👋</h1>
             <p className="text-muted-foreground text-sm">
