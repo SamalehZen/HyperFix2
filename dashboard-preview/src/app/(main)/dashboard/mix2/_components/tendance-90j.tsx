@@ -108,7 +108,7 @@ const qualitySeries = [
 
 const chartConfig = {
   negatifs: {
-    color: "var(--primary)",
+    color: "var(--negatifs-line)",
     label: "Négatifs",
   },
   corriges: {

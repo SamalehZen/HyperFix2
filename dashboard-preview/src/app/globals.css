@@ -93,6 +93,9 @@ These serve as the fallback; there is no separate default.css file. */
   --font-mono: var(--font-geist-mono);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
+  /* séries "négatifs" : suivent le primary, sauf exception par preset
+     (ex. tangerine fige son bleu ardoise historique). */
+  --negatifs-line: var(--primary);
 }
 
 .dark {
@@ -127,6 +130,7 @@ These serve as the fallback; there is no separate default.css file. */
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --negatifs-line: var(--primary);
 }
 
 @layer base {

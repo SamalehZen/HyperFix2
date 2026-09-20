@@ -23,7 +23,7 @@ function fmtFdj(v: number): string {
 const chartConfig = {
   negatifs: {
     label: "Négatifs du jour",
-    color: "var(--primary)",
+    color: "var(--negatifs-line)",
   },
   corriges: {
     label: "Corrigés (J-1)",
