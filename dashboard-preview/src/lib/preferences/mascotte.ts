@@ -5,9 +5,12 @@
  */
 export const MASCOTTE_OPTIONS = [
   { label: "Aucune (initiale S)", value: "none" },
+  { label: "Auto (rotation quotidienne)", value: "auto" },
   { label: "Blob", value: "blob" },
   { label: "Galet", value: "galet" },
   { label: "Dé", value: "de" },
+  { label: "Goutte", value: "goutte" },
+  { label: "Nuage", value: "nuage" },
 ] as const;
 
 export const MASCOTTE_VALUES = MASCOTTE_OPTIONS.map((o) => o.value);

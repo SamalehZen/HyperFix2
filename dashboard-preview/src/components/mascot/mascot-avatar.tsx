@@ -24,6 +24,8 @@ interface MascotAvatarProps {
   state?: MascotState;
   size?: number;
   interactive?: boolean;
+  /** Vignette figée : une seule image, aucune boucle rAF, aucun listener. */
+  frozen?: boolean;
   className?: string;
   label?: string;
 }
@@ -37,6 +39,7 @@ export function MascotAvatar({
   state = "idle",
   size = 48,
   interactive = false,
+  frozen = false,
   className,
   label = "Mascotte HyperFix",
 }: MascotAvatarProps) {
@@ -66,10 +69,10 @@ export function MascotAvatar({
     stateRef.current = state;
   }, [state]);
 
-  // Boucle de rendu (sauf reduced-motion : une image figée).
+  // Boucle de rendu (sauf reduced-motion ou frozen : une image figée).
   React.useEffect(() => {
     const eng = engineRef.current!;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (frozen || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       setFrame(renderFrame(eng, 1.2));
       return;
     }
@@ -90,11 +93,11 @@ export function MascotAvatar({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [frozen]);
 
-  // Suivi du pointeur (souris uniquement, pas au tactile).
+  // Suivi du pointeur (souris uniquement, pas au tactile, jamais en frozen).
   React.useEffect(() => {
-    if (!interactive) return;
+    if (!interactive || frozen) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const eng = engineRef.current!;
     let t0 = performance.now() / 1000;
@@ -113,7 +116,7 @@ export function MascotAvatar({
       window.removeEventListener("pointermove", onMove);
       document.removeEventListener("pointerleave", onLeave);
     };
-  }, [interactive]);
+  }, [interactive, frozen]);
 
   if (!frame) return null;
 

@@ -13,6 +13,7 @@ import type { ContentLayout, NavbarStyle, SidebarCollapsible, SidebarVariant } f
 import { MASCOTTE_OPTIONS, type Mascotte } from "@/lib/preferences/mascotte";
 import { THEME_PRESET_OPTIONS, type ThemeMode, type ThemePreset } from "@/lib/preferences/theme";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
+import { MascotGallery } from "@/components/mascot/mascot-gallery";
 
 export function LayoutControls() {
   const { values, resolvedThemeMode, setPreference, resetPreferences } = usePreferencesStore(
@@ -146,6 +147,10 @@ export function LayoutControls() {
                   </SelectGroup>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-1">
+              <MascotGallery />
             </div>
 
             <div className="space-y-1">

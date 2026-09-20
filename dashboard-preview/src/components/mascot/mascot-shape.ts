@@ -46,6 +46,22 @@ export function squircleProfile(): number[] {
   );
 }
 
+/** Goutte : large et ronde en bas, effilée en haut (y écran vers le bas). */
+export function dropletProfile(): number[] {
+  return normalize(
+    ANGLES.map((a) => 1 + 0.3 * Math.sin(a) ** 3 - 0.08 * Math.cos(2 * a)),
+    1.04,
+  );
+}
+
+/** Nuage : union de bosses, large en bas, lobes en haut. */
+export function cloudProfile(): number[] {
+  return normalize(
+    ANGLES.map((a) => 1 + 0.1 * Math.cos(3 * a + 1) + 0.06 * Math.cos(5 * a + 2)),
+    1.02,
+  );
+}
+
 /** Convertit un profil radial en chemin SVG polygonal (64 points = lisse à 48px). */
 export function profileToPath(radii: number[], scale = RAYON, cx = 0, cy = 0): string {
   const pts = radii.map((r, i) => {

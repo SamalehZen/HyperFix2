@@ -131,6 +131,17 @@ export function GammeDashboard() {
 
   const rayonLibelle = RAYONS.find((r) => r.id === rayon)?.libelle ?? rayon;
   const isReal = story !== null && stats !== null;
+  const negatifsCount = (story?.resume.nouveaux ?? 0) + (story?.resume.persistants ?? 0);
+  const anomaliesCount = story?.resume.anomalies ?? 0;
+  const etatMascotte = loading
+    ? "thinking"
+    : !isReal
+      ? "sleep"
+      : anomaliesCount > 0
+        ? "notify"
+        : negatifsCount >= 50
+          ? "alert"
+          : "idle";
   const subtitle = jour
     ? `Rayon ${rayonLibelle} · ${format(new Date(jour), "EEEE, do MMMM yyyy", { locale: fr })}`
     : `Rayon ${rayonLibelle}`;
@@ -139,7 +150,7 @@ export function GammeDashboard() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-4">
-          <MascotGamme />
+          <MascotGamme state={etatMascotte} />
           <div className="flex flex-col gap-1">
             <h1 className="text-3xl leading-none tracking-tight">Bonjour Samaleh 👋</h1>
             <p className="text-muted-foreground text-sm">
