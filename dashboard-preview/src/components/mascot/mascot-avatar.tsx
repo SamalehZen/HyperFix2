@@ -53,14 +53,11 @@ export function MascotAvatar({
   if (!engineRef.current) {
     engineRef.current = new MascotEngine(SHAPE_BY_ID.get(def.shape) ?? null);
   }
-  const engine = engineRef.current;
 
-  // Changement de mascotte : nouveau moteur, état conservé.
+  // Changement de mascotte : nouveau moteur (la boucle lit toujours l'instance courante).
   React.useEffect(() => {
     engineRef.current = new MascotEngine(SHAPE_BY_ID.get(def.shape) ?? null);
-    engineRef.current.setState(state, 0);
-    setFrame(renderFrame(engineRef.current, 1.2));
-  }, [def.shape, state]);
+  }, [def.shape]);
 
   // Changement d'état.
   const stateRef = React.useRef(state);
@@ -70,26 +67,21 @@ export function MascotAvatar({
   }, [state]);
 
   // Boucle de rendu (sauf reduced-motion ou frozen : une image figée).
+  // Lit engineRef à chaque frame : l'instance peut être remplacée (changement de forme).
   React.useEffect(() => {
-    const eng = engineRef.current!;
     if (frozen || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setFrame(renderFrame(eng, 1.2));
+      setFrame(renderFrame(engineRef.current!, 1.2));
       return;
     }
     let raf = 0;
     let start = 0;
-    let last = 0;
     const tick = (ms: number) => {
       raf = requestAnimationFrame(tick);
-      if (!start) {
-        start = ms;
-        last = ms;
-      }
-      const dt = Math.min((ms - last) / 1000, 0.064);
-      last = ms;
-      void dt;
-      eng.setState(stateRef.current, (ms - start) / 1000);
-      setFrame({ ...renderFrame(eng, (ms - start) / 1000) });
+      if (!start) start = ms;
+      const t = (ms - start) / 1000;
+      const eng = engineRef.current!;
+      eng.setState(stateRef.current, t);
+      setFrame({ ...renderFrame(eng, t) });
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
@@ -99,17 +91,19 @@ export function MascotAvatar({
   React.useEffect(() => {
     if (!interactive || frozen) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const eng = engineRef.current!;
-    let t0 = performance.now() / 1000;
+    const t0 = performance.now() / 1000;
     const onMove = (e: PointerEvent) => {
       if (e.pointerType === "touch") return;
       const box = svgRef.current?.getBoundingClientRect();
       if (!box || box.width === 0) return;
       const nx = (e.clientX - (box.left + box.width / 2)) / Math.max(1, window.innerWidth / 2);
       const ny = (e.clientY - (box.top + box.height / 2)) / Math.max(1, window.innerHeight / 2);
-      eng.setLook({ x: Math.max(-1, Math.min(1, nx)), y: Math.max(-1, Math.min(1, ny)) }, performance.now() / 1000 - t0);
+      engineRef.current!.setLook(
+        { x: Math.max(-1, Math.min(1, nx)), y: Math.max(-1, Math.min(1, ny)) },
+        performance.now() / 1000 - t0,
+      );
     };
-    const onLeave = () => eng.setLook(null, performance.now() / 1000 - t0);
+    const onLeave = () => engineRef.current!.setLook(null, performance.now() / 1000 - t0);
     window.addEventListener("pointermove", onMove);
     document.addEventListener("pointerleave", onLeave);
     return () => {

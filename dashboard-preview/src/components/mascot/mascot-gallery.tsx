@@ -19,6 +19,9 @@ export function MascotGallery() {
   const mascotte = usePreferencesStore((s) => s.values.mascotte);
   const setPreference = usePreferencesStore((s) => s.setPreference);
   const [survolee, setSurvolee] = React.useState<string | null>(null);
+  const [reducedMotion] = React.useState(
+    () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
 
   return (
     <div className="grid grid-cols-5 gap-1.5" role="radiogroup" aria-label="Choisir une mascotte">
@@ -44,7 +47,7 @@ export function MascotGallery() {
                 : "border-transparent hover:border-border hover:bg-muted/50",
             )}
           >
-            {hover && !active ? (
+            {hover && !active && !reducedMotion ? (
               <MascotAvatar mascotId={m.id} state="wink" size={40} label={m.label} />
             ) : (
               <MascotAvatar mascotId={m.id} state="idle" size={40} frozen label={m.label} />
