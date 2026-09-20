@@ -19,7 +19,7 @@ import {
   SIDEBAR_COLLAPSIBLE_VALUES,
   SIDEBAR_VARIANT_VALUES,
 } from "./layout";
-import { MASCOTTE_VALUES } from "./mascotte";
+import { MASCOTTE_RAYON_VALUES, MASCOTTE_VALUES } from "./mascotte";
 import { THEME_MODE_VALUES, THEME_PRESET_VALUES } from "./theme";
 
 export type PreferencePersistence = "none" | "client-cookie" | "server-cookie" | "localStorage";
@@ -108,6 +108,13 @@ export const PREFERENCE_REGISTRY = {
     defaultValue: "blob",
     persistence: "client-cookie",
     attribute: "data-mascotte",
+  }),
+
+  mascotte_rayon: definePreference({
+    values: MASCOTTE_RAYON_VALUES,
+    defaultValue: "auto",
+    persistence: "client-cookie",
+    attribute: "data-mascotte-rayon",
   }),
 } as const;
 

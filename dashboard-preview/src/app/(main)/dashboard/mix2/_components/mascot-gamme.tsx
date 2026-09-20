@@ -1,7 +1,7 @@
 /**
  * Mascotte du dashboard Mix2 : remplace l'initiale "S" devant "Bonjour Samaleh".
- * Lit la préférence `mascotte` ; "none" = initiale historique, "auto" = rotation
- * quotidienne stable (jour de l'année % catalogue).
+ * Résolution : `mascotte_rayon` explicite > équipe du rayon (mode auto) >
+ * préférence globale `mascotte` ("auto" = rotation quotidienne, "none" = S).
  * Reçoit l'état du dashboard (thinking/notify/sleep/alert/idle).
  */
 
@@ -9,7 +9,7 @@
 
 import { MascotAvatar } from "@/components/mascot/mascot-avatar";
 import type { MascotState } from "@/components/mascot/mascot-engine";
-import { MASCOTS } from "@/components/mascot/mascot-skins";
+import { EQUIPE_RAYON, MASCOTS } from "@/components/mascot/mascot-skins";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
 function rotationQuotidienne(): string {
@@ -18,9 +18,23 @@ function rotationQuotidienne(): string {
   return MASCOTS[jourAnnee % MASCOTS.length]!.id;
 }
 
-export function MascotGamme({ state = "idle" }: { state?: MascotState }) {
+function resoudreGlobale(mascotte: string): string {
+  if (mascotte === "auto") return rotationQuotidienne();
+  return mascotte;
+}
+
+export function MascotGamme({ state = "idle", rayon = "frais-surgele" }: { state?: MascotState; rayon?: string }) {
   const mascotte = usePreferencesStore((s) => s.values.mascotte);
-  const id = mascotte === "auto" ? rotationQuotidienne() : (mascotte ?? "none");
+  const mascotteRayon = usePreferencesStore((s) => s.values.mascotte_rayon);
+
+  let id: string;
+  if (mascotteRayon !== "auto" && mascotteRayon !== "none") {
+    id = mascotteRayon;
+  } else if (mascotteRayon === "auto") {
+    id = EQUIPE_RAYON[rayon] ?? resoudreGlobale(mascotte);
+  } else {
+    id = resoudreGlobale(mascotte);
+  }
 
   if (id === "none" || !MASCOTS.some((m) => m.id === id)) {
     return (

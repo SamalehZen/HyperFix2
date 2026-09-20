@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { type FontKey, fontOptions } from "@/lib/fonts/registry";
 import type { ContentLayout, NavbarStyle, SidebarCollapsible, SidebarVariant } from "@/lib/preferences/layout";
-import { MASCOTTE_OPTIONS, type Mascotte } from "@/lib/preferences/mascotte";
+import { MASCOTTE_OPTIONS, MASCOTTE_RAYON_OPTIONS, type Mascotte, type MascotteRayon } from "@/lib/preferences/mascotte";
 import { THEME_PRESET_OPTIONS, type ThemeMode, type ThemePreset } from "@/lib/preferences/theme";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 import { MascotGallery } from "@/components/mascot/mascot-gallery";
@@ -34,6 +34,7 @@ export function LayoutControls() {
     sidebar_collapsible: collapsible,
     font,
     mascotte,
+    mascotte_rayon: mascotteRayon,
   } = values;
 
   const onThemePresetChange = (preset: ThemePreset) => {
@@ -73,6 +74,11 @@ export function LayoutControls() {
   const onMascotteChange = (value: Mascotte | "") => {
     if (!value) return;
     setPreference("mascotte", value);
+  };
+
+  const onMascotteRayonChange = (value: MascotteRayon | "") => {
+    if (!value) return;
+    setPreference("mascotte_rayon", value);
   };
 
   return (
@@ -151,6 +157,24 @@ export function LayoutControls() {
 
             <div className="space-y-1">
               <MascotGallery />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="font-medium text-xs">Mascotte par rayon</Label>
+              <Select value={mascotteRayon} onValueChange={onMascotteRayonChange}>
+                <SelectTrigger size="sm" className="w-full text-xs">
+                  <SelectValue placeholder="Équipe" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {MASCOTTE_RAYON_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} className="text-xs" value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1">

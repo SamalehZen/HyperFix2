@@ -33,3 +33,9 @@ export const MASCOTS: MascotDef[] = [
 export const MASCOT_BY_ID = new Map(MASCOTS.map((m) => [m.id, m]));
 
 export const DEFAULT_MASCOT = "blob";
+
+/** Équipe par rayon : chaque rayon a sa mascotte en mode "auto". */
+export const EQUIPE_RAYON: Record<string, string> = {
+  "frais-surgele": "goutte",
+  "epicerie-salee": "galet",
+};

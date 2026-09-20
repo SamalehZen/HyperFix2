@@ -10,7 +10,7 @@
  */
 
 import { clamp, easings, lerp, TAU } from "./mascot-math";
-import { capsulePath, DEMI_VIEWBOX, profileToPath, RAYON } from "./mascot-shape";
+import { capsulePath, DEMI_VIEWBOX, profileToPath, radiusAtAngle, RAYON } from "./mascot-shape";
 
 export type MascotState = "idle" | "wink" | "thinking" | "notify" | "sleep" | "alert";
 
@@ -138,17 +138,25 @@ export class MascotEngine {
       : profileToPath(new Array(64).fill(breath), RAYON);
 
     // --- yeux : trous percés via <mask> (comme bloub), pas des formes posées
+    // Recalés au rayon réel dans leur direction (sinon le masque les rogne
+    // sur les formes étroites).
     const eyes: MascotEye[] = [];
     if (pose.alpha > 0.01) {
+      const fit = (x: number, y: number) => {
+        if (!radii) return 1;
+        const fitR = radiusAtAngle(radii, Math.atan2(y, x));
+        return Math.min(1, fitR / 0.9);
+      };
       const defs = [
         { x: -EYE_X, open: Math.min(lid, pose.openL) },
         { x: EYE_X, open: Math.min(lid, pose.openR) },
       ];
       for (const e of defs) {
         const k = Math.max(e.open, 0.06);
+        const f = fit(e.x + gx, gy);
         eyes.push({
           d: capsulePath(EYE_W * pose.scale, EYE_H * pose.scale),
-          matrix: `matrix(1,0,0,${k.toFixed(3)},${(e.x + gx).toFixed(2)},${gy.toFixed(2)})`,
+          matrix: `matrix(1,0,0,${k.toFixed(3)},${((e.x + gx) * f).toFixed(2)},${(gy * f).toFixed(2)})`,
           alpha: pose.alpha,
         });
       }
@@ -164,15 +172,16 @@ export class MascotEngine {
       });
     }
 
-    // --- notify : pastille avec pop ---------------------------------------
+    // --- notify : pastille avec pop, posée sur le contour réel --------------
     let badge: MascotFrame["badge"] = null;
     if (this.cur === "notify") {
       const p = clamp((now - this.tCur) / 0.45);
       const pop = 1 + 0.14 * Math.sin(p * Math.PI) * (1 - p * 0.35);
       const a = (-38 * Math.PI) / 180;
+      const fitR = radii ? radiusAtAngle(radii, a) : 1;
       badge = {
-        x: Math.cos(a) * 108,
-        y: Math.sin(a) * 108,
+        x: Math.cos(a) * 108 * Math.min(1, fitR),
+        y: Math.sin(a) * 108 * Math.min(1, fitR),
         r: 20 * (p < 1 ? pop : 1),
       };
     }
