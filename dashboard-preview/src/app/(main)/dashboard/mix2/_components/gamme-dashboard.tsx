@@ -4,9 +4,16 @@ import * as React from "react";
 
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { CalendarDays, Loader2, ShieldAlert, TriangleAlert } from "lucide-react";
+import { CalendarDays, ChevronDown, Loader2, ShieldAlert, TriangleAlert } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -89,6 +96,13 @@ export function GammeDashboard() {
 
   const prevJour = jours[1]?.jour ?? null;
 
+  const joursSet = React.useMemo(() => new Set(jours.map((d) => d.jour)), [jours]);
+  const joursAvecDonnees = React.useMemo(
+    () => jours.map((d) => new Date(`${d.jour}T12:00:00`)),
+    [jours]
+  );
+  const [calendrierOuvert, setCalendrierOuvert] = React.useState(false);
+
   React.useEffect(() => {
     if (!jour) return;
     let cancelled = false;
@@ -153,21 +167,38 @@ export function GammeDashboard() {
             </SelectContent>
           </Select>
 
-          <Select value={jour ?? ""} onValueChange={setJour} disabled={!jours.length}>
-            <SelectTrigger size="sm" className="w-40">
-              <SelectValue placeholder="Jour" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>Imports disponibles</SelectLabel>
-                {jours.map((d) => (
-                  <SelectItem key={d.jour} value={d.jour}>
-                    {format(new Date(d.jour), "EEEE d MMM", { locale: fr })}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+          <Popover open={calendrierOuvert} onOpenChange={setCalendrierOuvert}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="w-40 justify-between" disabled={!jours.length}>
+                {jour ? format(new Date(jour), "EEEE d MMM", { locale: fr }) : "Jour"}
+                <ChevronDown className="size-4 text-muted-foreground" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                mode="single"
+                locale={fr}
+                selected={jour ? new Date(jour) : undefined}
+                defaultMonth={jour ? new Date(jour) : undefined}
+                onSelect={(d) => {
+                  if (d) {
+                    setJour(format(d, "yyyy-MM-dd"));
+                    setCalendrierOuvert(false);
+                  }
+                }}
+                modifiers={{ hasData: joursAvecDonnees }}
+                modifiersStyles={{
+                  hasData: {
+                    fontWeight: 700,
+                    textDecoration: "underline",
+                    textDecorationColor: "var(--primary)",
+                    textUnderlineOffset: 3,
+                  },
+                }}
+                disabled={(date) => !joursSet.has(format(date, "yyyy-MM-dd"))}
+              />
+            </PopoverContent>
+          </Popover>
 
           {loading ? (
             <Badge variant="outline">

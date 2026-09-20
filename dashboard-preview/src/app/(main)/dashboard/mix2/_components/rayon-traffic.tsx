@@ -27,7 +27,7 @@ const chartConfig = {
   },
   corriges: {
     label: "Corrigés (J-1)",
-    color: "#f97316",
+    color: "var(--chart-2)",
   },
 } satisfies ChartConfig;
 

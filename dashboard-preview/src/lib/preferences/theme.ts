@@ -59,6 +59,14 @@ export const THEME_PRESET_OPTIONS = [
       dark: "oklch(0.4365 0.1044 156.7556)",
     },
   },
+  {
+    label: "Caffeine",
+    value: "caffeine",
+    primary: {
+      light: "oklch(0.4341 0.0392 41.9938)",
+      dark: "oklch(0.9247 0.0524 66.1732)",
+    },
+  },
 ] as const;
 
 export const THEME_PRESET_VALUES = THEME_PRESET_OPTIONS.map((p) => p.value);

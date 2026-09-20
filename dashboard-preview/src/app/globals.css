@@ -8,6 +8,7 @@
 @import "../styles/presets/tangerine.css";
 @import "../styles/presets/twitter.css";
 @import "../styles/presets/supabase.css";
+@import "../styles/presets/caffeine.css";
 
 @custom-variant dark (&:is(.dark *));
 
