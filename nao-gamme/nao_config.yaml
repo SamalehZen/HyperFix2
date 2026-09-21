@@ -90,6 +90,16 @@ llm:
     - id: z-ai/glm-5.2:free
       name: GLM 5.2 Free (z-ai)
       default: false
+  - provider: openaiCompatible/tokenharbor
+    api_key: "{{ env('TOKENHARBOR_API_KEY') }}"
+    base_url: "{{ env('TOKENHARBOR_BASE_URL') }}"
+    models:
+    - id: qwen3.8-flash:free
+      name: Qwen 3.8 Flash Free (gratuit)
+      default: false
+    - id: deepseek-v4.1-flash:free
+      name: DeepSeek V4.1 Flash Free (gratuit)
+      default: false
   - provider: openai
     api_key: "{{ env('OPENCODE_ZEN_API_KEY') }}"
     base_url: "{{ env('OPENCODE_ZEN_BASE_URL') }}"

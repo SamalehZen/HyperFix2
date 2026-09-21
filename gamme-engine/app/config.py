@@ -19,6 +19,29 @@ CLASSIF_BASE_URL = os.getenv("CLASSIF_BASE_URL") or BASE_URL
 CLASSIF_API_KEY = os.getenv("CLASSIF_API_KEY") or API_KEY
 CLASSIF_MODEL = os.getenv("CLASSIF_MODEL") or MODEL
 CLASSIF_MAX_LOT = int(os.getenv("CLASSIF_MAX_LOT", "20"))
+
+# TokenHarbor (modeles gratuits : qwen3.8-flash:free, deepseek-v4.1-flash:free).
+# Tout modele se terminant par ":free" est route automatiquement vers TokenHarbor
+# (si la cle est presente) : il suffit de changer le nom du modele via .env,
+# sans toucher au code ni aux base_url. Sinon : comportement luna inchange.
+TOKENHARBOR_BASE_URL = os.getenv("TOKENHARBOR_BASE_URL") or "https://tokenharbor.ai/v1"
+TOKENHARBOR_API_KEY = os.getenv("TOKENHARBOR_API_KEY") or ""
+
+
+def resolve_llm(base_url, api_key, model):
+    """Route les modeles `:free` vers TokenHarbor ; sinon trio d'origine."""
+    if model.endswith(":free") and TOKENHARBOR_API_KEY:
+        return TOKENHARBOR_BASE_URL, TOKENHARBOR_API_KEY, model
+    return base_url, api_key, model
+
+
+BASE_URL, API_KEY, MODEL = resolve_llm(BASE_URL, API_KEY, MODEL)
+LIBELLER_BASE_URL, LIBELLER_API_KEY, LIBELLER_MODEL = resolve_llm(
+    LIBELLER_BASE_URL, LIBELLER_API_KEY, LIBELLER_MODEL
+)
+CLASSIF_BASE_URL, CLASSIF_API_KEY, CLASSIF_MODEL = resolve_llm(
+    CLASSIF_BASE_URL, CLASSIF_API_KEY, CLASSIF_MODEL
+)
 DATA_DIR = os.getenv("GAMME_DATA_DIR", "/storage/gamme")
 NAO_PROJECT_DIR = os.getenv("NAO_PROJECT_DIR", "/root/nao-gamme")
 NAO_DB_PATH = os.path.join(NAO_PROJECT_DIR, "gamme.duckdb")

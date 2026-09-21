@@ -53,6 +53,9 @@ services:
             # Provider ExperientialLabs (défaut partout 09/2026 : luna + repli deepseek)
             EXPERIENTIAL_BASE_URL: ${EXPERIENTIAL_BASE_URL:-https://api.experientiallabs.ai/v1}
             EXPERIENTIAL_API_KEY: ${EXPERIENTIAL_API_KEY}
+            # Provider TokenHarbor (modeles gratuits : qwen3.8-flash:free + deepseek-v4.1-flash:free)
+            TOKENHARBOR_BASE_URL: ${TOKENHARBOR_BASE_URL:-https://tokenharbor.ai/v1}
+            TOKENHARBOR_API_KEY: ${TOKENHARBOR_API_KEY}
             GEMINI_API_KEY: ${GEMINI_API_KEY}
             # Bot Telegram (webhook) — config en base de données (project.telegram_settings)
             TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
@@ -112,6 +115,9 @@ services:
             GAMME_MCP_URL: https://gestion.hypeer.cloud/mcp
             GAMME_LLM_MODEL: ${GAMME_LLM_MODEL:-gpt-5.6-luna}
             GAMME_MAX_LLM_ARTICLES: ${GAMME_MAX_LLM_ARTICLES:-40}
+            # TokenHarbor : modeles ":free" routes auto (cf. config.py resolve_llm)
+            TOKENHARBOR_BASE_URL: ${TOKENHARBOR_BASE_URL:-https://tokenharbor.ai/v1}
+            TOKENHARBOR_API_KEY: ${TOKENHARBOR_API_KEY}
             LIBELLER_BASE_URL: ${LIBELLER_BASE_URL:-https://api.experientiallabs.ai/v1}
             LIBELLER_API_KEY: ${LIBELLER_API_KEY}
             LIBELLER_MODEL: ${LIBELLER_MODEL:-gpt-5.6-luna}
