@@ -616,12 +616,15 @@ export class MascotEngine {
     if (STATE_BY_ID.get(id)?.blinkIn) this.blinkAt = now;
   }
 
-  /** Cible du regard normalisée (-1..1) ; null = retour au repos. */
+  /**
+   * Cible du regard normalisée (-1..1, Y écran vers le bas) ; null = repos.
+   * Le pitch moteur est inversé (positif = haut) d'où le signe moins.
+   */
   setLook(target: { x: number; y: number } | null, now: number) {
     const cur = this.lookAtTime(now);
     this.lookPrev = { ...cur };
     if (target && Number.isFinite(target.x + target.y)) {
-      this.look = { yaw: target.x * 40, pitch: target.y * 30, mix: 1, wander: 0 };
+      this.look = { yaw: target.x * 40, pitch: -target.y * 30, mix: 1, wander: 0 };
     } else {
       this.look = NO_LOOK;
     }
