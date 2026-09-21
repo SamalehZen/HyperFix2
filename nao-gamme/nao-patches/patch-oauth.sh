@@ -95,3 +95,26 @@ else
         echo "[patch] ⚠ motif pwa-chat introuvable — patch ignoré."
     fi
 fi
+
+# Patch primary : violet nao → bleu HyperFix (light + dark). Seul changement
+# visuel du chat web. Glob index-*.css (hash change à chaque image).
+# Idempotent, boot non bloqué.
+CSS_BLUE="$(ls /app/apps/frontend/dist/assets/index-*.css 2>/dev/null | head -1)"
+if [ -z "$CSS_BLUE" ]; then
+    echo "[patch] ⚠ CSS primary introuvable — patch ignoré."
+elif grep -q "Patch HyperFix : primary" "$CSS_BLUE"; then
+    echo "[patch] primary déjà patché."
+else
+    if grep -q -- "--primary:oklch(50.77% .281 277.89);" "$CSS_BLUE"; then
+        sed -i 's|--primary:oklch(50.77% .281 277.89);|--primary:oklch(55% .2 260); /* Patch HyperFix : primary */|' "$CSS_BLUE"
+        echo "[patch] primary light patché (bleu HyperFix)."
+    else
+        echo "[patch] ⚠ motif primary light introuvable — patch ignoré."
+    fi
+    if grep -q -- "--primary:oklch(72.1% .157 290.2);" "$CSS_BLUE"; then
+        sed -i 's|--primary:oklch(72.1% .157 290.2);|--primary:oklch(70% .16 262); /* Patch HyperFix : primary */|' "$CSS_BLUE"
+        echo "[patch] primary dark patché (bleu HyperFix)."
+    else
+        echo "[patch] ⚠ motif primary dark introuvable — patch ignoré."
+    fi
+fi
