@@ -17,7 +17,6 @@ import {
 import { AssistantCompaction } from '@/components/chat-messages/assistant-compaction';
 import { AssistantMessageProvider } from '@/contexts/assistant-message';
 import { MessageParts } from '@/components/chat-messages/assistant-message';
-import { useToolCallDensity } from '@/hooks/use-tool-call-density';
 
 export type FeedbackRecommendationMap = Record<string, { id: string; title: string; status: string }>;
 
@@ -147,11 +146,9 @@ const AssistantMessageReadonly = memo(
 		message: UIMessage;
 		linkedRecommendation?: { id: string; title: string; status: string };
 	}) => {
-		const [toolCallDensity] = useToolCallDensity();
-		const messageParts = useMemo(
-			() => groupToolCalls(message.parts, toolCallDensity),
-			[message.parts, toolCallDensity],
-		);
+		// Single display mode (Gaia style): tool-call density setting removed,
+		// grouping always uses the 'detailed' baseline.
+		const messageParts = useMemo(() => groupToolCalls(message.parts, 'detailed'), [message.parts]);
 		const hasContent = useMemo(() => checkAssistantMessageHasContent(message), [message]);
 		const isCompacting = message.parts.at(-1)?.type === 'data-compactionSummaryStarted';
 

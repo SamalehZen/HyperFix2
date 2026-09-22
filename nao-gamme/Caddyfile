@@ -6,6 +6,15 @@ sim.hypeer.cloud {
 	reverse_proxy sim_light:3000
 }
 
+# Preview temporaire du frontend (thread Gaia) — serveur dev Vite sur l'hôte.
+# ⚠️ Dev uniquement : basicauth obligatoire (sources + HMR exposés).
+preview.hypeer.cloud {
+	basicauth {
+		sam $2a$14$b2ZgCQV5hBNmGPNdJTJkxOmvwXOw4PVxBC8wBw1nMqzwW/H5L8cI2
+	}
+	reverse_proxy host.docker.internal:3002
+}
+
 gestion.hypeer.cloud {
 	handle /rapports/* {
 		basicauth {

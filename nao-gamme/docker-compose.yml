@@ -34,6 +34,8 @@ services:
             SERVER_PORT: ${SERVER_PORT:-5005}
             BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
             BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:5005/}
+            # Preview temporaire du frontend (thread Gaia) — à retirer au nettoyage.
+            BETTER_AUTH_TRUSTED_ORIGINS: ${BETTER_AUTH_TRUSTED_ORIGINS:-}
             # Audience OAuth supplémentaire : le moteur gamme-engine (patch validAudiences).
             # Attention : correspondance EXACTE avec le resource du PRM (trailing slash inclus).
             # URL publique (via Caddy) pour que le flux OAuth navigateur fonctionne.

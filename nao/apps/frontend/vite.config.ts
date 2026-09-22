@@ -32,6 +32,8 @@ export default defineConfig({
 		},
 	},
 	server: {
+		// Preview publique temporaire (preview.hypeer.cloud via Caddy).
+		allowedHosts: ['preview.hypeer.cloud'],
 		proxy: {
 			'/api': {
 				target: 'http://localhost:5005',

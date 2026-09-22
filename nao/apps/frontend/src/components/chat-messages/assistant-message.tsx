@@ -6,10 +6,11 @@ import {
 	areGroupedMessagePartsEqual,
 	checkAssistantMessageHasContent,
 	groupToolCalls,
+	isPartGroupable,
 	isToolGroupPart,
 	isToolUIPart,
 } from '@/lib/ai';
-import { ToolCallsGroup } from '@/components/tool-calls/tool-calls-group';
+import { GaiaToolCallsGroup } from '@/components/tool-calls/gaia-tool-calls-group';
 import { ToolCall } from '@/components/tool-calls';
 import { AssistantReasoning } from '@/components/chat-messages/assistant-reasoning';
 import { AssistantCompaction } from '@/components/chat-messages/assistant-compaction';
@@ -19,7 +20,6 @@ import { AssistantMessageActions } from '@/components/chat-messages/assistant-me
 import { cn, isLast } from '@/lib/utils';
 import { useChatId } from '@/hooks/use-chat-id';
 import { useIsCancellingMessage } from '@/hooks/use-is-cancelling-message-store';
-import { useToolCallDensity } from '@/hooks/use-tool-call-density';
 import { AssistantMessageProvider, useAssistantMessage } from '@/contexts/assistant-message';
 
 export const AssistantMessage = memo(
@@ -39,11 +39,9 @@ export const AssistantMessage = memo(
 		storyIntroMessageId: string | undefined;
 	}) => {
 		const chatId = useChatId();
-		const [toolCallDensity] = useToolCallDensity();
-		const messageParts = useMemo(
-			() => groupToolCalls(message.parts, toolCallDensity),
-			[message.parts, toolCallDensity],
-		);
+		// Single display mode (Gaia style): tool-call density setting removed,
+		// grouping always uses the 'detailed' baseline.
+		const messageParts = useMemo(() => groupToolCalls(message.parts, 'detailed'), [message.parts]);
 		const hasContent = useMemo(() => checkAssistantMessageHasContent(message), [message]);
 		const isCancelling = useIsCancellingMessage(message.id);
 		const isCompacting = message.parts.at(-1)?.type === 'data-compactionSummaryStarted';
@@ -104,10 +102,16 @@ export const MessageParts = memo(
 export const MessagePart = memo(
 	({ part, isPartSettled }: { part: GroupedMessagePart; isPartSettled: boolean }) => {
 		if (isToolGroupPart(part)) {
-			return <ToolCallsGroup parts={part.parts} isSettled={isPartSettled} />;
+			return <GaiaToolCallsGroup parts={part.parts} isSettled={isPartSettled} />;
 		}
 
 		if (isToolUIPart(part)) {
+			// Single activity tools render in the Gaia thread too ("Used 1 tool").
+			// Only pure visual tools keep their rich single cards
+			// (story, display_chart, display_map, clarification, SQL tables...).
+			if (isPartGroupable(part, 'detailed')) {
+				return <GaiaToolCallsGroup parts={[part]} isSettled={isPartSettled} />;
+			}
 			return <ToolCall toolPart={part} />;
 		}
 
