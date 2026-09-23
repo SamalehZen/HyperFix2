@@ -294,6 +294,91 @@ def test_stock_negatif_sans_capital(seeded2, tmp_path, monkeypatch):
     assert 700 in prix and prix[0] == 400, prix
 
 
+def test_appel_plat_luna_aboutit_bis(seeded, tmp_path, monkeypatch):
+    # Doublon volontaire du test ci-dessus (meme nom historique) : bout en
+    # bout avec les args plats de Luna.
+    monkeypatch.setattr(xi, "EXPORTS_DIR", str(tmp_path))
+    monkeypatch.setattr(xi, "PUBLIC_BASE", "https://x/exports")
+    monkeypatch.setattr(xi, "LAST_PLAN_FILE", str(tmp_path / "last.json"))
+    plan = {"rayon": "frais-surgele"}
+    plan.update(xi.plan_from_args({"type": "marge", "rayon": "Frais surgelé",
+                                   "format": "xlsx", "resume": True}))
+    plan["rayon"] = config.resolve_rayon(plan["rayon"])
+    res = xi.build_excel(plan)
+    assert res["success"], res.get("erreur")
+    assert res["nb_articles"] == 1
+
+
+# --------------------------------- jeu n3 : marge<0 ET stock>0 meme jour ----
+def _seed_negpos(conn):
+    """Marge<0 ET stock>0 le MEME jour (+ pieges + valeurs texte)."""
+    jours = ["2026-07-30", "2026-07-31", "2026-08-01"]
+    data = {
+        900001: ("CAS POSITIF", [-5.0, 3.0, 3.0], [10, 10, 10]),
+        900005: ("CAS POSITIF MULTI", [-2.0, -9.0, 4.0], [3, 7, 7]),
+        900006: ("CAS TEXTE", ["-7.5", None, "abc"], ["4", "5", "6"]),
+        900002: ("PIEGE JOURS SEPARES", [-8.0, 5.0, 5.0], [0, 12, 12]),
+        900003: ("PIEGE STOCK NUL/NEG", [-3.0, -4.0, 6.0], [0, -5, 9]),
+        900004: ("PIEGE MARGE POSITIVE", [6.0, 6.0, 6.0], [20, 20, 20]),
+    }
+    for jour in jours:
+        i = jours.index(jour)
+        rows = [{"Code": c, "Libellé": lib, "Marge %": marges[i], "Stock": stocks[i],
+                 "Px vente": 100.0, "Px revient": 80.0, "Fournisseur": "F",
+                 "Couv. ": 5.0, "Valeur stock   PRMP": 80.0}
+                for c, (lib, marges, stocks) in data.items()]
+        df = pd.DataFrame(rows)
+        for col in config.REQUIRED_COLUMNS:
+            if col not in df.columns:
+                df[col] = None
+        iid = db.create_import(conn, "frais-surgele", jour, f"np-{jour}.xlsx",
+                               f"h-np-{jour}", "ok", nb_articles=len(rows))
+        db.insert_snapshot(conn, iid, "frais-surgele", jour, df)
+
+
+@pytest.fixture()
+def seeded_negpos(fresh_db, monkeypatch):
+    monkeypatch.setattr(config, "rayon_ids", lambda: ["frais-surgele", "epicerie-salee"])
+    with fresh_db.lock_conn() as conn:
+        _seed_negpos(conn)
+    return fresh_db
+
+
+def _run_negpos(tmp_path, monkeypatch, plan):
+    monkeypatch.setattr(xi, "EXPORTS_DIR", str(tmp_path))
+    monkeypatch.setattr(xi, "PUBLIC_BASE", "https://x/exports")
+    monkeypatch.setattr(xi, "LAST_PLAN_FILE", str(tmp_path / "last.json"))
+    return xi.build_excel(plan)
+
+
+def test_marge_negative_stock_positif_meme_jour(seeded_negpos, tmp_path, monkeypatch):
+    plan = {"rayon": "frais-surgele", "indicateur": "marge",
+            "selection": {"marge_negative_stock_positif": True},
+            "date_debut": "2026-07-30", "date_fin": "2026-08-01",
+            "double_classement": True, "couleurs": True, "resume": True}
+    res = _run_negpos(tmp_path, monkeypatch, plan)
+    assert res["success"], res.get("erreur")
+    assert res["nb_articles"] == 3, res
+    assert res["partiel"] is False
+    from openpyxl import load_workbook
+    wb = load_workbook(res["fichier"])
+    assert set(wb.sheetnames) == {"Prios argent", "Prix à corriger", "Résumé"}
+    codes = {wb["Prios argent"].cell(row=r, column=1).value
+             for r in range(2, wb["Prios argent"].max_row + 1)}
+    assert codes == {900001, 900005, 900006}, codes
+    f = res["filtre"]
+    assert (f["nb_articles"], f["nb_journees"], f["premiere_occurrence"],
+            f["derniere_occurrence"], f["marge_min"], f["stock_max"]) == \
+           (3, 4, "2026-07-30", "2026-07-31", -9.0, 10)
+
+
+def test_plan_from_args_mappe_filtre_negpos():
+    plan = xi.plan_from_args({"rayon": "frais-surgele", "indicateur": "marge",
+                              "marge_negative": True, "stock_positif": True,
+                              "exclure_stock_zero": True})
+    assert plan["selection"] == {"marge_negative_stock_positif": True}
+
+
 def test_appel_plat_luna_aboutit(seeded, tmp_path, monkeypatch):
     # Bout en bout : les args plats de Luna produisent un fichier verifie.
     monkeypatch.setattr(xi, "EXPORTS_DIR", str(tmp_path))

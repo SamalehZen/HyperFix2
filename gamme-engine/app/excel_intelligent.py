@@ -288,6 +288,53 @@ def _selectionner(recs, plan):
     return list(recs)  # "tous" et inconnu -> tout (le tri decide de l'ordre)
 
 
+def _fnum(v):
+    """float() tolerant aux colonnes TEXTE de article_history : None, NaN,
+    '' et chaines non numeriques -> None (ligne ignoree par les filtres)."""
+    if v is None:
+        return None
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    try:
+        if pd.isna(f):
+            return None
+    except (TypeError, ValueError):
+        return None
+    return f
+
+
+def _filtre_marge_negative_stock_positif(full: pd.DataFrame):
+    """Condition combinee au niveau LIGNE historique (code, jour) :
+    marge_pct < 0 ET stock > 0 le MEME jour. Retourne (codes, stats) avec
+    nb_articles (distincts), nb_journees (lignes qualif.), premiere/
+    derniere occurrence, marge_min et stock_max observes."""
+    qualifs = []  # (code, jour, marge, stock)
+    for _, r in full.iterrows():
+        marge = _fnum(r.get("marge_pct"))
+        stock = _fnum(r.get("stock"))
+        if marge is None or stock is None:
+            continue
+        if marge < 0 and stock > 0:
+            try:
+                code = int(r["code"])
+            except (TypeError, ValueError):
+                continue
+            qualifs.append((code, str(r["jour"]), marge, stock))
+    codes = sorted({c for c, _, _, _ in qualifs})
+    if not qualifs:
+        stats = {"nb_articles": 0, "nb_journees": 0, "premiere_occurrence": None,
+                 "derniere_occurrence": None, "marge_min": None, "stock_max": None}
+    else:
+        stats = {"nb_articles": len(codes), "nb_journees": len(qualifs),
+                 "premiere_occurrence": min(j for _, j, _, _ in qualifs),
+                 "derniere_occurrence": max(j for _, j, _, _ in qualifs),
+                 "marge_min": min(m for _, _, m, _ in qualifs),
+                 "stock_max": max(s for _, _, _, s in qualifs)}
+    return codes, stats
+
+
 # --------------------------------------------------------------- classeur ----
 def _style_matrice(ws, n_dates: int, couleurs: bool, rouges: set,
                    vertes: set, sombres: set):
@@ -483,8 +530,8 @@ def verifier_classeur(path: str, ctx: dict) -> list:
             check(f"{titre}: colonnes fixes", fixes == FIXED_HEADERS, "|".join(map(str, fixes)))
     # Valeurs et couleurs : controle par feuille (les coordonnees se repetent
     # d'un onglet a l'autre) + comptage global. Feuilles simples ignorees.
-    rouges_vues = vertes_vues = 0
-    rouges_att = vertes_att = 0
+    rouges_vues = vertes_vues = sombres_vues = 0
+    rouges_att = vertes_att = sombres_att = 0
     ok_couleurs = True
     for titre in ctx["ordres"]:
         if titre not in wb.sheetnames or titre in ctx.get("simples", {}):
@@ -497,10 +544,17 @@ def verifier_classeur(path: str, ctx: dict) -> list:
         rouges_att += att
         if vues != att:
             ok_couleurs = False
+        sombres = sum(1 for r in range(2, ws.max_row + 1) for k in range(len(ctx["jours"]))
+                      if _rgb(ws.cell(row=r, column=COL_DATE0 + k)) == "9C0006")
+        satt = len(ctx.get("sombres", {}).get(titre, set()))
+        sombres_vues += sombres
+        sombres_att += satt
+        if sombres != satt:
+            ok_couleurs = False
         vertes_vues += sum(1 for r in range(2, ws.max_row + 1) for k in range(len(ctx["jours"]))
                            if _rgb(ws.cell(row=r, column=COL_DATE0 + k)) == "C6EFCE")
-    check("cellules rouges = baisses detectees", ok_couleurs and rouges_att > 0,
-          f"vues {rouges_vues}, attendues {rouges_att}")
+    check("cellules rouges = baisses detectees", ok_couleurs and (rouges_att + sombres_att) > 0,
+          f"vues {rouges_vues}, attendues {rouges_att} (sombres {sombres_vues}/{sombres_att})")
     for code, jour, attendu in ctx["points"][:8]:
         titre = ctx["feuille_point"]
         ws = wb[titre]
@@ -574,6 +628,10 @@ def plan_from_args(args: dict) -> dict:
                          [x.strip() for x in str(codes).split(",") if x.strip()]}
     if selection is not None:
         plan["selection"] = selection
+    if _tobool(args.get("marge_negative")) and _tobool(args.get("stock_positif")):
+        # Filtre combine historique : marge<0 ET stock>0 le MEME jour.
+        # (Les autres cles filtres.* restent ignorees : jamais silencieux ici.)
+        plan["selection"] = {"marge_negative_stock_positif": True}
     seuil = first("seuil_baisse_pts", "seuil")
     if seuil is not None:
         try:
@@ -677,7 +735,16 @@ def build_excel(plan: dict, base: str = "zero") -> dict:
         return {"success": False, "erreur": "Aucune donnée pour cet indicateur sur la période."}
 
     recs_all = _metriques(full, jours, indicateur, plan)
-    lignes = _selectionner(recs_all, plan)
+    filtre_negpos = None
+    if isinstance(plan.get("selection"), dict) and plan["selection"].get("marge_negative_stock_positif"):
+        # Filtre combine au niveau ligne (code, jour) : marge<0 ET stock>0
+        # le MEME jour. Les agregats par article (_metriques/_selectionner)
+        # ne peuvent pas l'exprimer (premier/dernier jour uniquement).
+        _codes_negpos, filtre_negpos = _filtre_marge_negative_stock_positif(full)
+        _vus_negpos = set(_codes_negpos)
+        lignes = [r for r in recs_all if r["code"] in _vus_negpos]
+    else:
+        lignes = _selectionner(recs_all, plan)
     if not lignes:
         return {"success": False, "erreur": (
             "Aucun article ne correspond à la sélection "
@@ -710,7 +777,7 @@ def build_excel(plan: dict, base: str = "zero") -> dict:
     wb = Workbook()
     wb.remove(wb.active)
     ctx = {"jours": jours, "label_ind": label_ind, "titres_attendus": [],
-           "ordres": {}, "rouges": {}, "points": [], "feuille_point": "",
+           "ordres": {}, "rouges": {}, "sombres": {}, "points": [], "feuille_point": "",
            "simples": {},
            "selection": plan["selection"], "resume_demande": bool(plan.get("resume"))}
     feuilles = {}
@@ -725,6 +792,7 @@ def build_excel(plan: dict, base: str = "zero") -> dict:
         ctx["titres_attendus"].append(titre)
         ctx["ordres"][titre] = [r["code"] for r in rows]
         ctx["rouges"][titre] = st["rouges"]
+        ctx["sombres"][titre] = st["sombres"]
         feuilles[titre] = {"lignes": len(rows), "total": total}
         return rows
 
@@ -793,6 +861,7 @@ def build_excel(plan: dict, base: str = "zero") -> dict:
         "top_perte": f"{top_perte['code']} {top_perte['libelle']} ({top_perte['impact']:.0f})",
         "partiel": partiel,
         "causes": causes,
+        "filtre_negpos": filtre_negpos,
         "dormants_nb": len(dormants_full),
         "dormants_capital": round(sum(r["valstock_last"] for r in dormants_full)),
         "ruptures_nb": len(ruptures_full),
@@ -834,6 +903,7 @@ def build_excel(plan: dict, base: str = "zero") -> dict:
         "ruptures_nb": ctx["ruptures_nb"],
         "fantomes_nb": ctx["fantomes_nb"],
         "causes": ctx["causes"],
+        "filtre": filtre_negpos,
         "fichier": out_path if ok else "",
         "url": f"{PUBLIC_BASE}/{name}" if ok else "",
         "verifications": verifications,
