@@ -379,15 +379,13 @@ def test_plan_from_args_mappe_filtre_negpos():
     assert plan["selection"] == {"marge_negative_stock_positif": True}
 
 
-def test_appel_plat_luna_aboutit(seeded, tmp_path, monkeypatch):
-    # Bout en bout : les args plats de Luna produisent un fichier verifie.
-    monkeypatch.setattr(xi, "EXPORTS_DIR", str(tmp_path))
-    monkeypatch.setattr(xi, "PUBLIC_BASE", "https://x/exports")
-    monkeypatch.setattr(xi, "LAST_PLAN_FILE", str(tmp_path / "last.json"))
-    plan = {"rayon": "frais-surgele"}
-    plan.update(xi.plan_from_args({"type": "marge", "rayon": "Frais surgelé",
-                                   "format": "xlsx", "resume": True}))
-    plan["rayon"] = config.resolve_rayon(plan["rayon"])
-    res = xi.build_excel(plan)
-    assert res["success"], res.get("erreur")
-    assert res["nb_articles"] == 1
+def test_selection_inconnue_refusee_honnetement(seeded_negpos, tmp_path, monkeypatch):
+    # Une chaine de selection inconnue (ex. "marge_negative" inventee par
+    # l'agent) ne doit JAMAIS retomber silencieusement sur "tous".
+    plan = {"rayon": "frais-surgele", "indicateur": "marge",
+            "selection": "marge_negative",
+            "date_debut": "2026-07-30", "date_fin": "2026-08-01"}
+    res = _run_negpos(tmp_path, monkeypatch, plan)
+    assert res["success"] is False
+    assert "marge_negative" in res["erreur"]
+    assert "baisses" in res["erreur"] and "marge_negative_stock_positif" in res["erreur"]

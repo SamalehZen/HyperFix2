@@ -61,9 +61,11 @@ description: "Excel GAMME prioritaire (gamme, marge, stock, prix, rayon, article
 - `indicateur` : `marge` (marge %) | `stock` | `px_vente` | `px_revient`
   | `couv` | `valeur_stock`. Montants **FDJ**, jamais d'euros.
 - `selection` : `baisses` (Δ premier→dernier jour ≤ −seuil) | `hausses`
-  | `tous` | `negatifs` (stock dernier jour < 0) | `changements_prix`
-  (px_vente a bougé) | `sans_changement` | `{"codes":[44774,...]}`
-  | `{"mots":"OEUF,EGG"}` (match libellé).
+  | `tous` | `negatifs` (stock dernier jour < 0 — ATTENTION : stock, pas marge)
+  | `changements_prix` (px_vente a bougé) | `sans_changement`
+  | `{"codes":[44774,...]}` | `{"mots":"OEUF,EGG"}` (match libellé)
+  | `{"marge_negative_stock_positif": true}` (articles ayant eu ≥1 jour avec
+  marge < 0 ET stock > 0 le même jour ; colonnes texte converties, NULL ignorés).
 - `seuil_baisse_pts` : défaut 5. « comme l'article 44774 » = baisses de marge,
   seuil 5 (44774 : 31,93 → 10,06 = −21,87 pts le 14/09).
 - `date_debut`/`date_fin` : `YYYY-MM-DD`, seulement si période donnée.
@@ -95,6 +97,21 @@ description: "Excel GAMME prioritaire (gamme, marge, stock, prix, rayon, article
   l'ancienne présentation, sans revenir en arrière.
 - « ajoute un onglet » → impossible sans nouvelle donnée : demander laquelle
   (ou proposer le 2e classement / un autre indicateur).
+- « excel de ces <N> articles » (liste établie dans la conversation : les 213,
+  les négatifs du jour…) → **toujours** `{"codes":[...]}` avec TOUS les codes
+  (les recopier depuis le résultat d'outil, jamais de tête, jamais tronqués),
+  jamais une chaîne inventée.
+- Période nommée (« tout l'historique », « 30/07 au 22/09 »…) → toujours
+  `date_debut`/`date_fin` explicites `YYYY-MM-DD` (jamais vide quand une
+  période a été dite).
+- **Ne JAMAIS inventer de valeur `selection`** : seules existent
+  `baisses|hausses|tous|negatifs|changements_prix|sans_changement|{codes}|
+  {mots}|{marge_negative_stock_positif}`. Toute autre chaîne est refusée par
+  le moteur (échec honnête) — ne pas essayer de deviner, demander ou utiliser
+  `{codes}`.
+- Marge négative + stock positif le même jour → UNIQUEMENT
+  `{"marge_negative_stock_positif": true}` (+ dates). `negatifs` seul = stock
+  négatif, jamais la marge.
 
 ## Format de réponse
 

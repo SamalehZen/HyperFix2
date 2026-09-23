@@ -285,7 +285,8 @@ def _selectionner(recs, plan):
         return [r for r in recs if r["px_bouge"]]
     if sel == "sans_changement":
         return [r for r in recs if r["stable"]]
-    return list(recs)  # "tous" et inconnu -> tout (le tri decide de l'ordre)
+    return list(recs)  # "tous" uniquement (les chaines inconnues sont
+    # refusees plus haut dans build_excel : jamais de repli silencieux).
 
 
 def _fnum(v):
@@ -719,6 +720,13 @@ def build_excel(plan: dict, base: str = "zero") -> dict:
         return {"success": False,
                 "erreur": f"Indicateur inconnu : {indicateur!r} (marge, stock, px_vente, px_revient, couv, valeur_stock)."}
     col_ind, label_ind, num_format = INDICATEURS[indicateur]
+    _sel = plan.get("selection")
+    if isinstance(_sel, str) and _sel not in SELECTIONS:
+        return {"success": False,
+                "erreur": f"Sélection inconnue : {_sel!r} (chaînes valides : "
+                          f"{', '.join(sorted(SELECTIONS))} ; dict valides : "
+                          "{{'codes': [...]}, {'mots': '...'}, "
+                          "{'marge_negative_stock_positif': True})."}
     for label, v in (("date_debut", plan.get("date_debut") or ""),
                      ("date_fin", plan.get("date_fin") or "")):
         if v and not _JOUR_RE.match(v):
