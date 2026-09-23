@@ -585,6 +585,43 @@ def _tobool(v):
 SELECTIONS = {"baisses", "hausses", "tous", "negatifs", "changements_prix",
               "sans_changement"}
 
+# Clés de plan comprises par build_excel. Toute autre clé est soit rejetée
+# (si elle ressemble à un filtre : l'intention serait perdue), soit listée
+# dans res["cles_ignorees"] pour que l'agent VOIE ce qui n'a pas été appliqué.
+CLES_PLAN = {"rayon", "indicateur", "selection", "seuil_baisse_pts",
+             "date_debut", "date_fin", "double_classement", "couleurs",
+             "resume", "titre", "inclure_dormants", "inclure_ruptures",
+             "rupture_stock_max", "rupture_couv_max",
+             "marge_negative", "stock_positif"}
+CLES_FILTRE_SUSPECTES = {"filtres", "filtre", "filters", "filter",
+                         "conditions", "condition", "where"}
+
+
+def _normaliser_selection(plan: dict) -> dict:
+    """Les flags marge_negative+stock_positif posés DIRECTEMENT dans plan_json
+    (pas seulement en args plats) activent aussi le mode combiné, quand la
+    sélection est absente ou vaut un défaut large (baisses/tous). Une sélection
+    dict explicite ({codes}, {mots}, {marge_negative_stock_positif}) gagne
+    toujours : elle n'est jamais écrasée ici."""
+    sel = plan.get("selection")
+    if _tobool(plan.get("marge_negative")) and _tobool(plan.get("stock_positif")):
+        if sel is None or (isinstance(sel, str) and sel in ("baisses", "tous")):
+            plan = {**plan, "selection": {"marge_negative_stock_positif": True}}
+    return plan
+
+
+def _cles_suspectes(plan: dict) -> list:
+    """Clés inconnues qui ressemblent à un filtre : intention probablement
+    perdue -> refus honnête plutôt que export faux."""
+    out = []
+    for k in plan:
+        if k in CLES_PLAN:
+            continue
+        kl = str(k).lower()
+        if kl in CLES_FILTRE_SUSPECTES or kl.startswith(("filtr", "filter")):
+            out.append(k)
+    return out
+
 
 def plan_from_args(args: dict) -> dict:
     """Fusionne des arguments PLATS (façon LLM qui improvise : rayon_id, type,
@@ -715,6 +752,17 @@ def build_excel(plan: dict, base: str = "zero") -> dict:
         return {"success": False,
                 "erreur": f"Rayon inconnu : {plan.get('rayon')!r} (rayons : {valides})."}
     plan = {**plan, "rayon": rayon}
+    plan = _normaliser_selection(plan)
+    _suspectes = _cles_suspectes(plan)
+    if _suspectes:
+        return {"success": False,
+                "erreur": f"Clé(s) de filtrage non prise(s) en charge : "
+                          f"{', '.join(sorted(map(str, _suspectes)))}. Le moteur "
+                          f"refuse plutôt que d'ignorer silencieusement. Utilisez "
+                          f"selection parmi {', '.join(sorted(SELECTIONS))} ou "
+                          f"{{'codes': [...]}}, {{'mots': '...'}} ou "
+                          f"{{'marge_negative_stock_positif': True}}."}
+    cles_ignorees = sorted(str(k) for k in plan if k not in CLES_PLAN)
     indicateur = plan.get("indicateur") or "marge"
     if indicateur not in INDICATEURS:
         return {"success": False,
@@ -912,6 +960,7 @@ def build_excel(plan: dict, base: str = "zero") -> dict:
         "fantomes_nb": ctx["fantomes_nb"],
         "causes": ctx["causes"],
         "filtre": filtre_negpos,
+        "cles_ignorees": cles_ignorees,
         "fichier": out_path if ok else "",
         "url": f"{PUBLIC_BASE}/{name}" if ok else "",
         "verifications": verifications,

@@ -112,6 +112,11 @@ description: "Excel GAMME prioritaire (gamme, marge, stock, prix, rayon, article
 - Marge négative + stock positif le même jour → UNIQUEMENT
   `{"marge_negative_stock_positif": true}` (+ dates). `negatifs` seul = stock
   négatif, jamais la marge.
+- `plan_json` limité aux champs du modèle ci-dessus : **jamais** de clés
+  `objectif`, `filtres`, `colonnes`, `evolution`, `sortie`, `historique`,
+  `livrable` — le moteur les refuse (`filtres`…) ou les ignore en le
+  signalant (`cles_ignorees`), et un `{"codes":[...]}` incomplet vaut
+  export incomplet.
 
 ## Format de réponse
 

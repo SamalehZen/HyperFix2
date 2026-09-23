@@ -379,6 +379,42 @@ def test_plan_from_args_mappe_filtre_negpos():
     assert plan["selection"] == {"marge_negative_stock_positif": True}
 
 
+def test_cles_filtre_inconnues_refusees_honnetement(seeded_negpos, tmp_path, monkeypatch):
+    # Le plan reel qui a produit le 2000/8271 : selection "tous" + liste
+    # "filtres" ignoree silencieusement. Desormais : refus explicite.
+    plan = {"rayon": "frais-surgele", "indicateur": "marge", "selection": "tous",
+            "filtres": [{"colonne": "Marge %", "condition": "< 0"}],
+            "date_debut": "2026-07-30", "date_fin": "2026-08-01"}
+    res = _run_negpos(tmp_path, monkeypatch, plan)
+    assert res["success"] is False
+    assert "filtres" in res["erreur"]
+    assert "marge_negative_stock_positif" in res["erreur"]
+
+
+def test_flags_plan_json_activent_mode_combine(seeded_negpos, tmp_path, monkeypatch):
+    # Flags poses directement dans plan_json (sans "selection") : meme effet
+    # que les args plats, au lieu de retomber sur "baisses" par defaut.
+    plan = {"rayon": "frais-surgele", "indicateur": "marge",
+            "marge_negative": True, "stock_positif": True,
+            "date_debut": "2026-07-30", "date_fin": "2026-08-01",
+            "double_classement": True, "couleurs": True, "resume": True}
+    res = _run_negpos(tmp_path, monkeypatch, plan)
+    assert res["success"], res.get("erreur")
+    assert res["nb_articles"] == 3, res
+    assert res["filtre"]["nb_articles"] == 3
+
+
+def test_cle_inconnue_benigne_signalee_sans_blocage(seeded_negpos, tmp_path, monkeypatch):
+    plan = {"rayon": "frais-surgele", "indicateur": "marge",
+            "selection": {"codes": [900001]},
+            "date_debut": "2026-07-30", "date_fin": "2026-08-01",
+            "titre_personnalise": "Top 212"}
+    res = _run_negpos(tmp_path, monkeypatch, plan)
+    assert res["success"], res.get("erreur")
+    assert res["nb_articles"] == 1
+    assert "titre_personnalise" in res["cles_ignorees"]
+
+
 def test_selection_inconnue_refusee_honnetement(seeded_negpos, tmp_path, monkeypatch):
     # Une chaine de selection inconnue (ex. "marge_negative" inventee par
     # l'agent) ne doit JAMAIS retomber silencieusement sur "tous".
