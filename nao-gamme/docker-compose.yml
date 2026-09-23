@@ -18,9 +18,9 @@ services:
         restart: unless-stopped
 
     nao:
-        # Image locale avec le thread Gaia (build du commit 3236cfd).
+        # Image locale avec le thread Gaia + couleurs par outil (build du commit 660af5b).
         # Rollback : remettre getnao/nao:latest puis `docker compose up -d nao`.
-        image: hyperfix-nao:gaia-thread-1
+        image: hyperfix-nao:gaia-thread-2
         container_name: nao_gamme
         entrypoint:
             - /bin/sh
